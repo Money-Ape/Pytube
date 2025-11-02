@@ -1,7 +1,9 @@
+from logging import root
 import subprocess as cmd
 import platform
+import os
 import tkinter as tk
-from tkinter import scrolledtext, messagebox, ttk
+from tkinter import ttk, scrolledtext, messagebox, ttk, filedialog, Toplevel
 import threading
 
 def money_ape():
@@ -175,9 +177,59 @@ class Tubit:
         self.setup_ui()
         
     def setup_ui(self):
-        # Main container
-        main_container = tk.Frame(self.root, bg=self.bg_color)
-        main_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        # Main container wrapped in a canvas so the whole page becomes scrollable
+        outer_canvas = tk.Canvas(self.root, bg=self.bg_color, highlightthickness=0)
+        outer_scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=outer_canvas.yview)
+
+        main_container = tk.Frame(outer_canvas, bg=self.bg_color)
+        # keep window id to resize inner frame width when canvas resizes
+        main_window_id = outer_canvas.create_window((0, 0), window=main_container, anchor="nw")
+
+        def _on_main_config(event):
+            # update scrollregion when the inner frame changes
+            try:
+                outer_canvas.configure(scrollregion=outer_canvas.bbox("all"))
+            except Exception:
+                pass
+
+        main_container.bind("<Configure>", _on_main_config)
+
+        def _on_outer_config(event):
+            # ensure the inner frame width matches the canvas width
+            try:
+                outer_canvas.itemconfig(main_window_id, width=event.width)
+            except Exception:
+                pass
+
+        outer_canvas.bind("<Configure>", _on_outer_config)
+        outer_canvas.configure(yscrollcommand=outer_scrollbar.set)
+
+        # Mouse wheel support for the whole page (Windows and X11)
+        def _on_mousewheel(event):
+            if hasattr(event, 'delta') and event.delta:
+                # Windows / macOS
+                outer_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            elif event.num == 4:
+                outer_canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                outer_canvas.yview_scroll(1, "units")
+
+        def _bind_to_mousewheel(event):
+            outer_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            outer_canvas.bind_all("<Button-4>", _on_mousewheel)
+            outer_canvas.bind_all("<Button-5>", _on_mousewheel)
+
+        def _unbind_from_mousewheel(event):
+            outer_canvas.unbind_all("<MouseWheel>")
+            outer_canvas.unbind_all("<Button-4>")
+            outer_canvas.unbind_all("<Button-5>")
+
+        outer_canvas.bind('<Enter>', _bind_to_mousewheel)
+        outer_canvas.bind('<Leave>', _unbind_from_mousewheel)
+
+        # Pack the canvas and scrollbar to replace a direct main frame packing
+        outer_scrollbar.pack(side="right", fill="y")
+        outer_canvas.pack(side="left", fill="both", expand=True, padx=15, pady=15)
         
         # Header
         header_frame = tk.Frame(main_container, bg=self.bg_color)
@@ -253,17 +305,52 @@ class Tubit:
         # Create main scrollable area for grid layout (ONLY VERTICAL SCROLL)
         canvas = tk.Canvas(quality_inner, bg=self.card_color, highlightthickness=0)
         scrollbar_y = ttk.Scrollbar(quality_inner, orient="vertical", command=canvas.yview)
-        
+
         self.scrollable_frame = tk.Frame(canvas, bg=self.card_color)
-        
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # Create window and keep its id so we can adjust width when canvas resizes
+        window_id = canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # Configure scrollregion when inner frame changes
+        def _on_frame_config(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        self.scrollable_frame.bind("<Configure>", _on_frame_config)
+
+        # Ensure the inner frame width matches the canvas width (prevents horizontal cutoff)
+        def _on_canvas_config(event):
+            try:
+                canvas.itemconfig(window_id, width=event.width)
+            except Exception:
+                pass
+
+        canvas.bind("<Configure>", _on_canvas_config)
         canvas.configure(yscrollcommand=scrollbar_y.set)
-        
+
+        # Add simple mousewheel support (Windows and X11)
+        def _on_mousewheel(event):
+            # For Windows, event.delta is multiple of 120
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+            else:
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+        def _bind_to_mousewheel(event):
+            # Mouse wheel events: Windows uses <MouseWheel>, Linux/X11 uses Button-4/5
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            canvas.bind_all("<Button-4>", _on_mousewheel)
+            canvas.bind_all("<Button-5>", _on_mousewheel)
+
+        def _unbind_from_mousewheel(event):
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+
+        canvas.bind('<Enter>', _bind_to_mousewheel)
+        canvas.bind('<Leave>', _unbind_from_mousewheel)
+
         # Pack scrollbar and canvas (NO HORIZONTAL SCROLLBAR)
         scrollbar_y.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
@@ -504,12 +591,20 @@ class Tubit:
         if not self.selected_format:
             messagebox.showerror("Error", "Please select a format first")
             return
-        
+        # Ask user to choose download directory (must run on main thread)
+        download_dir = filedialog.askdirectory(title="Select download folder", initialdir=os.getcwd())
+        if not download_dir:
+            # User cancelled folder selection — keep enabled
+            return
+
+        # Store chosen directory for use in download
+        self.download_dir = download_dir
+
         # Disable button and update status
         self.download_button.configure(state='disabled', text='Downloading...')
         self.status_label.config(text="Starting download...")
         self.update_progress_bar(0)
-        
+
         # Run in separate thread
         thread = threading.Thread(target=self.download_video)
         thread.daemon = True
@@ -532,25 +627,50 @@ class Tubit:
                 self.root.after(0, lambda p=i: self.status_label.config(text=f"Downloading... {p}%"))
                 threading.Event().wait(0.2)  # Simulated delay
             
-            if current_os == "Windows":
-                result = cmd.run(["cmd", "/c", "yt-dlp", "-f", f"{format_id}", f"{url}"],
-                               capture_output=True, text=True)
-            elif current_os == "Linux":
-                result = cmd.run(["yt-dlp", "-f", f"{format_id}", f"{url}"],
-                               capture_output=True, text=True)
-            else:
-                self.root.after(0, lambda: messagebox.showerror("Error", "Unsupported platform"))
-                return
-            
-            if result.returncode == 0:
-                self.root.after(0, lambda: self.update_progress_bar(100))
-                self.root.after(0, lambda: self.status_label.config(text="Download completed successfully!"))
+            # Use yt_dlp Python API instead of external `yt-dlp` command to avoid PATH issues
+            try:
+                # Progress hook to update UI from yt_dlp
+                def progress_hook(d):
+                    status = d.get('status')
+                    if status == 'downloading':
+                        downloaded = d.get('downloaded_bytes') or 0
+                        total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+                        if total:
+                            percent = downloaded / total * 100
+                            self.root.after(0, lambda p=percent: self.update_progress_bar(p))
+                            self.root.after(0, lambda p=percent: self.status_label.config(text=f"Downloading... {p:.1f}%"))
+                    elif status == 'finished':
+                        self.root.after(0, lambda: self.update_progress_bar(100))
+                        self.root.after(0, lambda: self.status_label.config(text="Download completed successfully!"))
+
+                # Build yt_dlp options; if user chose a download directory, use it for outtmpl
+                outtmpl = None
+                try:
+                    dl_dir = getattr(self, 'download_dir', None) or os.getcwd()
+                    # Ensure path exists
+                    if not os.path.isdir(dl_dir):
+                        os.makedirs(dl_dir, exist_ok=True)
+                    outtmpl = os.path.join(dl_dir, '%(title)s.%(ext)s')
+                except Exception:
+                    outtmpl = '%(title)s.%(ext)s'
+
+                ydl_opts = {
+                    'format': format_id,
+                    'progress_hooks': [progress_hook],
+                    'outtmpl': outtmpl,
+                }
+
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+
+                # On success, notify user (UI updates already handled in hooks)
                 self.root.after(0, lambda: messagebox.showinfo("Success", 
                     f"Video downloaded successfully!\n"
                     f"Format: {self.selected_format['display_name']}\n"
                     f"Size: {self.selected_format['filesize']}"))
-            else:
-                error_msg = result.stderr if result.stderr else "Download failed"
+
+            except Exception as e:
+                error_msg = str(e)
                 self.root.after(0, lambda: self.status_label.config(text="Download failed"))
                 self.root.after(0, lambda: messagebox.showerror("Download Error", error_msg))
                 

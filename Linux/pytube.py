@@ -147,7 +147,7 @@ class Tubit:
     def __init__(self, root):
         self.root = root
         self.root.title("Money-Ape : Pytube")
-        self.root.geometry("550x900")
+        self.root.geometry("530x900")
         self.root.configure(bg='#1a1a1a')
         
         # Make window non-resizable and remove maximize button
@@ -221,20 +221,45 @@ class Tubit:
         
         # Now use padded_frame instead of main_container for all widgets
         main_container = padded_frame
-        
-        # Header
+
+        # Header with Logo and Title
         header_frame = tk.Frame(main_container, bg=self.bg_color)
         header_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        # Title
-        title_frame = tk.Frame(header_frame, bg=self.bg_color)
-        title_frame.pack()
-        
-        title_label = tk.Label(title_frame, text="Tubit",
-                             font=('Arial', 28, 'bold'),
-                             bg=self.bg_color, fg=self.text_color)
+
+        # Create a container for centered logo and title
+        header_content = tk.Frame(header_frame, bg=self.bg_color)
+        header_content.pack(anchor=tk.CENTER)
+
+        # Load and display logo
+        try:
+            from PIL import Image, ImageTk
+            logo_path = "Assets/tubit_logo.png"
+            logo_image = Image.open(logo_path)
+            
+            # Set taskbar/window icon (platform independent)
+            try:
+                # For Windows and Linux
+                self.root.iconphoto(True, ImageTk.PhotoImage(logo_image))
+            except Exception as icon_error:
+                print(f"Warning: Could not set window icon - {icon_error}")
+            
+            # Resize logo to 30x30 pixels for display in header
+            logo_image = logo_image.resize((30, 30), Image.Resampling.LANCZOS)
+            self.logo_photo = ImageTk.PhotoImage(logo_image)
+            
+            logo_label = tk.Label(header_content, image=self.logo_photo, bg=self.bg_color)
+            logo_label.pack(side=tk.LEFT, padx=(0, 10))
+
+        except Exception as e:
+            print(f"Warning: Could not load logo - {e}")
+
+        # Title label next to the logo
+        title_label = tk.Label(header_content, text="Tubit", 
+                            font=("Arial", 28, "bold"), 
+                            fg=self.text_color, bg=self.bg_color)
         title_label.pack(side=tk.LEFT)
-        
+
+        # Subtitle below logo and title
         subtitle_label = tk.Label(header_frame, text="Download YouTube videos",
                                 font=('Arial', 12),
                                 bg=self.bg_color, fg=self.muted_text)

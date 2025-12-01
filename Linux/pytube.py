@@ -147,7 +147,7 @@ class Tubit:
     def __init__(self, root):
         self.root = root
         self.root.title("Money-Ape : Pytube")
-        self.root.geometry("520x900")
+        self.root.geometry("550x900")
         self.root.configure(bg='#1a1a1a')
         
         # Make window non-resizable and remove maximize button

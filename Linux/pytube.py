@@ -68,7 +68,7 @@ def OS_platform_verify():
                     print(f"Failed to install {module_name}.\n")
     else:
         print("Your Operating System isn't compatible for PYTUBE.!!")
-
+OS_platform_verify()
 
 import yt_dlp
 from tabulate import tabulate
@@ -619,9 +619,7 @@ class Tubit:
             # Re-enable button
             self.root.after(0, lambda: self.download_button.configure(state='normal', text='Download Selected Format'))
 
-if __name__ == "__main__":
-    OS_platform_verify()
-    
+if __name__ == "__main__":  
     root = tk.Tk()
     app = Tubit(root)
     root.mainloop()

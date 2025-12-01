@@ -1,9 +1,0 @@
-
-# Ignore large local ffmpeg binaries to avoid GitHub push errors
-
-Pytube-Pro/ffmpeg/
-*.exe
-*.zip
-*.tar.*
-*.xz
-*.bat

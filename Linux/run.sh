@@ -13,7 +13,7 @@ case "$current_os" in
 	*)
 esac
 
-modules=$(python3 - << 'EOF'
+modules=$(python - << 'EOF'
 import importlib, sys
 
 modules = ["yt_dlp", "tkinter", "tabulate"]

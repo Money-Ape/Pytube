@@ -1,0 +1,57 @@
+# JPG
+*.jpg 
+*.jpeg
+*.jpe
+*.jif
+*.jfif
+*.jfi
+
+# PNG
+*.png
+
+# GIF
+*.gif
+
+# WEBP
+*.webp
+
+# TIFF
+*.tiff
+*.tif
+
+# PSD
+*.psd
+
+# BIMP
+*bimp
+*.dib
+
+# SVG
+*.svg
+*.svgz
+
+# Webm
+*.webm
+
+# Matroska
+*.mkv
+
+# OGG
+*.ogg
+
+# AVI
+*.avi
+
+# Quick Time
+*.mov
+*.qt
+
+# MPEG-4, 2, 1
+*.mp4
+*.mpeg
+*.mpg
+*.mp2
+*.m4v
+*.mpv
+*.mpe
+*.m4p

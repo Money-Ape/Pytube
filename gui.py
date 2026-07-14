@@ -1,6 +1,6 @@
-import sys, os
+import sys, os, urllib.request, tempfile
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QLineEdit, QPushButton, QScrollArea, QGridLayout, QSizePolicy, QProgressBar)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QFont, QPixmap
 from theme import THEMES
 from tubit import TubitBack
@@ -79,8 +79,8 @@ class TubitUI(QMainWindow):
                 border-radius : 12px;
             }}
             QFrame#FormatCard[selected="true"] {{
-                background : {self.w};
-                border : 2px solid {self.b};
+                background : #384455;
+                border : 2px solid {self.a};
             }}
             QLineEdit {{
                 background : {self.i};
@@ -463,6 +463,12 @@ class TubitUI(QMainWindow):
     def toggle_fetch_btn(self):
         if not self.url_entry.text().strip():
             self.fetch_btn.hide()
+            self.fetch_btn.hide()
+            self.format_count.setText("0")
+            self.video_title.setText("No video loaded.!")
+            self.video_channel.setText("Channel : ---")
+            self.video_duration.setText("Duration : --:--")
+
         else:
             self.fetch_btn.show()
 
@@ -489,6 +495,12 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Media type
         type_label = QLabel(fmt["media_type"])
+        codec_label = QLabel(fmt["codec"].upper())
+        codec_label.setStyleSheet(f"""
+            color:{self.st};
+            font-size:9pt;
+        """)
+
         type_label.setStyleSheet(f"""
             color : {self.st};
             font-size : 10pt;
@@ -508,6 +520,7 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Assemble
         layout.addWidget(quality_label)
+        layout.addWidget(codec_label)
         layout.addWidget(type_label)
         layout.addStretch()
         layout.addWidget(size_label)
@@ -528,7 +541,7 @@ class TubitUI(QMainWindow):
         self.selected_format = fmt
 
         self.selected_format_label.setText(
-            f"{fmt['quality']} • "
+            f"✓ {fmt['quality']} • "
             f"{fmt['extension']} • "
             f"{fmt['size']}"
         )
@@ -551,6 +564,7 @@ class TubitUI(QMainWindow):
             return
 
         self.download_btn.setEnabled(False)
+        self.fetch_btn.setEnabled(False)
         self.progress.setValue(0)
         self.download_status_label.setText("Starting download...")
 
@@ -563,11 +577,13 @@ class TubitUI(QMainWindow):
     def download_complete(self):
         self.progress.setValue(100)
         self.download_btn.setEnabled(True)
-        self.download_status_label.setText("Download complete successfully.!")
         self.fetch_btn.setEnabled(True)
+        self.download_status_label.setText("Download complete successfully.!")
+        QTimer.singleShot(1500, lambda: self.progress.setValue(0))
 
     def backend_error(self, mesg):
         self.fetch_btn.setEnabled(True)
+        self.download_btn.setEnabled(True)
         self.fetch_btn.setText("Fetch Available Formats")
 
         self.download_status_label.setText(mesg)
@@ -575,6 +591,12 @@ class TubitUI(QMainWindow):
     def populate_formats(self, info, formats):
         self.formats = formats
         self.video_info = info
+
+        self.selected_format = None
+        self.selected_card = None
+        self.progress.setValue(0)
+        self.selected_format_label.setText("No Format Selected.!")
+
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("Fetch Available Formats")
 

@@ -99,6 +99,7 @@ class FetchWorker(QThread):
                 info = tubit_ydl.extract_info(self.url, download=False)
 
             formats = []
+            seen = set()
             for fmt in info.get("formats", []):
                 if not fmt.get("format_id"):
                     continue
@@ -112,14 +113,24 @@ class FetchWorker(QThread):
                 acodec = fmt.get("acodec", "none")
 
                 media_type = (
-                    "video + Audio"
+                    "Video + Audio"
                     if vcodec != "none" and acodec != "none"
                     else
-                    "video Only"
+                    "Video Only"
                     if vcodec != "none"
                     else
-                    "Audio"
+                    "Audio Only"
                 )
+                key = (
+                    height,
+                    fmt.get("ext"),
+                    vcodec, acodec
+                )
+                if key in seen:
+                    continue
+
+                seen.add(key)
+
                 formats.append({
                     "format_id" : fmt["format_id"],
                     "quality" : f"{height}p"
@@ -129,6 +140,7 @@ class FetchWorker(QThread):
 
                     "size" : format_file_size(filesize),
                     "media_type" : media_type,
+                    "codec" : vcodec,
                     "height" : height or 0,
                 })
 
@@ -169,10 +181,13 @@ class TubitBack(QObject):
         self.fetch_worker.error.connect(self.fetch_worker.deleteLater)
 
         self.fetch_worker.finished.connect(lambda: setattr(self, "fetch_worker", None))
+        self.fetch_worker.error.connect(lambda: setattr(self, "fetch_worker", None))
 
         self.fetch_worker.start()
 
     def download(self, url, format_id):
+        if self.download_worker and self.download_worker.isRunning():
+            return
         self.download_worker = DownloadWorker(url, format_id)
 
         self.download_worker.progress.connect(self.download_progress.emit)
@@ -184,6 +199,7 @@ class TubitBack(QObject):
         self.download_worker.error.connect(self.download_worker.deleteLater)
 
         self.download_worker.finished.connect(lambda: setattr(self, "download_worker", None))
+        self.download_worker.error.connect(lambda: setattr(self, "download_worker", None))
 
         self.download_worker.start()
 
@@ -211,10 +227,10 @@ class DownloadWorker(QThread):
     def progress_hook(self, d):
         if d["status"] == "downloading":
             percent_text = d.get("_percent_str", "0%")
-            matchp = re.search(r"(\d+(\.\d)?)", percent_text)
-            value = float(matchp.group(1)) if matchp else 0
-            speed = d.get("_speed_str", "")
-            eta = d.get("_eta_str", "")
+            ansi = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]", percent_text)
+            value = float(ansi.group(1)) if ansi else 0
+            speed = ansi.sub("", d.get("_speed_str", ""))
+            eta = ansi.sub("", d.get("_eta_str", ""))
             status = f"{value:.1f}%"
 
             if speed:
@@ -224,21 +240,19 @@ class DownloadWorker(QThread):
                 status += f" • ETA {eta}"
             
             self.progress.emit(value, status)
-        
-        elif d["status"] == "finished":
-            self.progress.emit(100, "Finalizing...")
-            self.finished.emit()
 
     def run(self):
         try:
-            self.DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
+            DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
             opts = {
                 "format" : self.format_id,
-                "outtmpl" : os.path.join(self.DOWNLOAD_DIR, "%(title)s.%(ext)s"),
+                "outtmpl" : os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s"),
                 "progress_hooks" : [self.progress_hook]
             }
             with yt_dlp.YoutubeDL(opts) as tubit_ydl:
                 tubit_ydl.download([self.url])
+
+            self.finished.emit() # Only now is the worker truly finished.
         
         except Exception as e:
             self.error.emit(str(e))

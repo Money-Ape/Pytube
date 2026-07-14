@@ -1,8 +1,5 @@
-import subprocess as cmd
-import platform
-import tkinter as tk
-from tkinter import scrolledtext, messagebox, ttk
-import threading
+import yt_dlp, subprocess as cmd, platform, os, re
+from PySide6.QtCore import (QObject, QThread, Signal)
 
 def money_ape():
     print(r" __  __                              _                 ")
@@ -71,75 +68,177 @@ def OS_platform_verify():
         print("Your Operating System isn't compatible for PYTUBE.!!")
 OS_platform_verify()
 
-import yt_dlp
-from tabulate import tabulate
-
 def format_file_size(size):
     if size is None:
         return "Unknown"
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size < 1024.0:
+    
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    for unit in units:
+        if size < 1024:
             return f"{size:.2f} {unit}"
-        size /= 1024.0
+        size /= 1024
+    
+    return f"{size:.2f} PB"
 
-def video_formats(url):
-    ydl_opts = {
-        'quiet': True,
-        'skip_download': True,
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            formats = info.get('formats', [])
+class FetchWorker(QThread):
+    finished = Signal(dict, list)
+    error = Signal(str)
 
-        # Get ALL available formats with simplified details
-        all_formats = []
-        
-        for fmt in formats:
-            height = fmt.get('height')
-            width = fmt.get('width')
-            format_id = fmt['format_id']
-            filesize = fmt.get('filesize_approx', fmt.get('filesize'))
-            vcodec = fmt.get('vcodec', 'none')
-            acodec = fmt.get('acodec', 'none')
-            ext = fmt.get('ext', 'unknown')
-            
-            # Create format info with simplified display
-            format_info = {
-                'format_id': format_id,
-                'height': height or 0,
-                'width': width or 0,
-                'filesize': format_file_size(filesize),
-                'ext': ext.upper(),
-                'has_video': vcodec != 'none',
-                'has_audio': acodec != 'none',
-                'vcodec': vcodec,
-                'acodec': acodec
+    def __init__(self, url):
+        super().__init__()
+
+        self.url = url
+
+    def run(self):
+        try:
+            opts = {
+                "quiet" : True,
+                "skip_download" : True
             }
+            with yt_dlp.YoutubeDL(opts) as tubit_ydl:
+                info = tubit_ydl.extract_info(self.url, download=False)
+
+            formats = []
+            for fmt in info.get("formats", []):
+                if not fmt.get("format_id"):
+                    continue
+
+                if fmt.get("protocol") == "mhtml":
+                    continue
+
+                height = fmt.get("height")
+                filesize = fmt.get("filesize_approx", fmt.get("filesize"))
+                vcodec = fmt.get("vcodec", "none")
+                acodec = fmt.get("acodec", "none")
+
+                media_type = (
+                    "video + Audio"
+                    if vcodec != "none" and acodec != "none"
+                    else
+                    "video Only"
+                    if vcodec != "none"
+                    else
+                    "Audio"
+                )
+                formats.append({
+                    "format_id" : fmt["format_id"],
+                    "quality" : f"{height}p"
+
+                    if height else "Audio",
+                    "extension" : fmt.get("ext", "Unknown").upper(),
+
+                    "size" : format_file_size(filesize),
+                    "media_type" : media_type,
+                    "height" : height or 0,
+                })
+
+            formats.sort(key=lambda x: (
+                x["media_type"] == "Audio", -x["height"]
+                )
+            )
+            self.finished.emit(info, formats)
+        
+        except Exception as e:
+            self.error.emit(str(e))
+
+# ==================================================
+# Backend
+
+class TubitBack(QObject):
+    formats_loaded = Signal(dict, list)
+    error = Signal(str)
+
+    download_progress = Signal(float, str)
+    download_finished = Signal()
+    download_error = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+
+        self.fetch_worker = None
+        self.download_worker = None
+
+    def fetch_formats(self, url):
+        self.fetch_worker = FetchWorker(url)
+
+        self.fetch_worker.finished.connect(self.formats_loaded.emit)
+        self.fetch_worker.error.connect(self.error.emit)
+
+        # Cleanup
+        self.fetch_worker.finished.connect(self.fetch_worker.deleteLater)
+        self.fetch_worker.error.connect(self.fetch_worker.deleteLater)
+
+        self.fetch_worker.finished.connect(lambda: setattr(self, "fetch_worker", None))
+
+        self.fetch_worker.start()
+
+    def download(self, url, format_id):
+        self.download_worker = DownloadWorker(url, format_id)
+
+        self.download_worker.progress.connect(self.download_progress.emit)
+        self.download_worker.finished.connect(self.download_finished.emit)
+        self.download_worker.error.connect(self.download_error.emit)
+
+        # Cleanup
+        self.download_worker.finished.connect(self.download_worker.deleteLater)
+        self.download_worker.error.connect(self.download_worker.deleteLater)
+
+        self.download_worker.finished.connect(lambda: setattr(self, "download_worker", None))
+
+        self.download_worker.start()
+
+    def stop(self):
+        if self.fetch_worker and self.fetch_worker.isRunning():
+            self.fetch_worker.quit()
+            self.fetch_worker.wait()
+
+        if self.download_worker and self.download_worker.isRunning():
+            self.download_worker.quit()
+            self.download_worker.wait()
+
+class DownloadWorker(QThread):
+    progress = Signal(float, str)
+
+    finished = Signal()
+    error = Signal(str)
+
+    def __init__(self, url, format_id):
+        super().__init__()
+
+        self.url = url
+        self.format_id = format_id
+
+    def progress_hook(self, d):
+        if d["status"] == "downloading":
+            percent_text = d.get("_percent_str", "0%")
+            matchp = re.search(r"(\d+(\.\d)?)", percent_text)
+            value = float(matchp.group(1)) if matchp else 0
+            speed = d.get("_speed_str", "")
+            eta = d.get("_eta_str", "")
+            status = f"{value:.1f}%"
+
+            if speed:
+                status += f" • {speed}"
+
+            if eta:
+                status += f" • ETA {eta}"
             
-            # Create simplified display name (only quality, size, extension)
-            if height and vcodec != 'none':
-                if acodec != 'none':
-                    display_name = f"{height}p {ext.upper()}"
-                else:
-                    display_name = f"{height}p {ext.upper()}\n(Video Only)"
-            elif acodec != 'none' and vcodec == 'none':
-                display_name = f"Audio Only\n{ext.upper()}"
-            else:
-                display_name = f"Format {format_id}\n{ext.upper()}"
-            
-            format_info['display_name'] = display_name
-            all_formats.append(format_info)
+            self.progress.emit(value, status)
         
-        # Sort formats: Video formats by resolution (desc), then audio formats
-        video_formats = [f for f in all_formats if f['has_video']]
-        audio_formats = [f for f in all_formats if not f['has_video'] and f['has_audio']]
+        elif d["status"] == "finished":
+            self.progress.emit(100, "Finalizing...")
+            self.finished.emit()
+
+    def run(self):
+        try:
+            self.DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
+            opts = {
+                "format" : self.format_id,
+                "outtmpl" : os.path.join(self.DOWNLOAD_DIR, "%(title)s.%(ext)s"),
+                "progress_hooks" : [self.progress_hook]
+            }
+            with yt_dlp.YoutubeDL(opts) as tubit_ydl:
+                tubit_ydl.download([self.url])
         
-        video_formats.sort(key=lambda x: x['height'], reverse=True)
-        
-        sorted_formats = video_formats + audio_formats
-        
-        return sorted_formats, info.get('title', 'Unknown Title')
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None, None
+        except Exception as e:
+            self.error.emit(str(e))

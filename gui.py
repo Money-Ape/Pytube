@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QFont, QPixmap
 from theme import THEMES
+from tubit import TubitBack
 
 def resource_path(relative_path):
     try:
@@ -11,14 +12,6 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
 
     return os.path.join(base_path, relative_path)
-
-def size_calc(self, size):
-    units = ["Bytes", "KB", "MB", "GB", "TB"]
-    for unit in units:
-        if size < 1024 or unit == "TB":
-            return f"{size:.2f} {unit}"
-        size /= 1024
-    return f"{size:.2f} PB"
 
 class TubitUI(QMainWindow):
     def __init__(self):
@@ -29,11 +22,20 @@ class TubitUI(QMainWindow):
         self.apply_theme()
         self.build_ui()
 
+        self.backend = TubitBack()
+        self.selected_format = None
+        self.selected_card = None
+        self.backend.formats_loaded.connect(self.populate_formats)
+        self.backend.error.connect(self.backend_error)
+        self.backend.download_progress.connect(self.update_progress)
+        self.backend.download_finished.connect(self.download_complete)
+        self.backend.download_error.connect(self.backend_error)
+
     def setup_window(self):
         self.setWindowTitle("Tubit")
         self.setWindowIcon(QIcon(resource_path("assets/Tubit.ico")))
-        self.resize(620, 900)
-        self.setMinimumSize(620, 900)
+        self.resize(700, 900)
+        self.setMinimumSize(700, 900)
         
         self.scroll_win = QScrollArea()
         self.scroll_win.setWidgetResizable(True)
@@ -71,10 +73,14 @@ class TubitUI(QMainWindow):
                 background : transparent;
                 color : {self.t};
             }}
-            QFrame#Card {{
+            QFrame#FormatCard {{
                 background : {self.w};
                 border : 1px solid {self.b};
-                border-radius : 14px;
+                border-radius : 12px;
+            }}
+            QFrame#FormatCard[selected="true"] {{
+                background : {self.w};
+                border : 2px solid {self.b};
             }}
             QLineEdit {{
                 background : {self.i};
@@ -235,6 +241,7 @@ class TubitUI(QMainWindow):
         self.fetch_btn.hide()
 
         self.url_entry.textChanged.connect(self.toggle_fetch_btn)
+        self.fetch_btn.clicked.connect(self.fetch_formats)
 
         # Assemble
         url_layout.addWidget(url_title)
@@ -245,7 +252,6 @@ class TubitUI(QMainWindow):
         # Format card
         formats_card = QFrame()
         formats_card.setObjectName("Card")
-        # formats_card.setMinimumHeight(340)
         formats_layout = QVBoxLayout(formats_card)
         formats_layout.setContentsMargins(20, 20, 20, 20)
         formats_layout.setSpacing(15)
@@ -257,7 +263,7 @@ class TubitUI(QMainWindow):
         video_card.setObjectName("Card")
 
         video_layout = QVBoxLayout(video_card)
-        video_layout.setContentsMargins(20, 20, 20, 20)
+        video_layout.setContentsMargins(16, 16, 16, 16)
         video_layout.setSpacing(15)
 
         # ==================================================
@@ -275,7 +281,7 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Thumnail placeholder
         self.thumbnail = QLabel()
-        self.thumbnail.setFixedSize(120, 69)
+        self.thumbnail.setFixedSize(96, 54)
         self.thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.thumbnail.setStyleSheet(f"""
@@ -305,7 +311,7 @@ class TubitUI(QMainWindow):
         """)
 
         # Duration
-        self.video_duration = QLabel("Duration : --|--")
+        self.video_duration = QLabel("Duration : --:--")
         self.video_duration.setStyleSheet(f"""
             color : {self.st};
         """)
@@ -352,8 +358,9 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Download button
         self.download_btn = QPushButton("Download")
-        self.download_btn.setMinimumHeight(42)
+        self.download_btn.setMinimumHeight(36)
         self.download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.download_btn.clicked.connect(self.download_video)
 
         self.download_btn.setEnabled(False)
 
@@ -364,7 +371,7 @@ class TubitUI(QMainWindow):
         self.progress.setMaximum(100)
         self.progress.setValue(0)
         self.progress.setVisible(True)
-        self.progress.setMinimumHeight(18)
+        self.progress.setMinimumHeight(14)
 
         # ==================================================
         # Status
@@ -411,6 +418,7 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Scroll area
         self.format_scroll = QScrollArea()
+        self.format_scroll.setMinimumHeight(400)
         self.format_scroll.setWidgetResizable(True)
         self.format_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.format_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -424,17 +432,20 @@ class TubitUI(QMainWindow):
 
         self.format_scroll.setWidget(self.format_ctn)
 
-        for i in range(8):
-            card = self.format_card(
-                "1080p",
-                "MP4",
-                "84 MB",
-                "Video + Audio"
-            )
-            row = i // 2
-            col = i % 2
-            self.grid.addWidget(card, row, col)
+        self.empty_formats = QLabel(
+            "Paste a YouTube URL and click\n"
+            "\"Fetch Available Formats\""
+        )
+        self.empty_formats.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_formats.setStyleSheet(f"""
+            color: {self.st};
+            font-size: 11pt;
+        """)
 
+        self.grid.addWidget(
+            self.empty_formats,
+            0, 0, 1, 2
+        )
         formats_layout.addWidget(formats_header)
         formats_layout.addWidget(self.format_scroll)
 
@@ -455,11 +466,15 @@ class TubitUI(QMainWindow):
         else:
             self.fetch_btn.show()
 
-    def format_card(self, quality, extension, size, media_type):
+    def format_card(self, fmt):
         card = QFrame()
-        card.setObjectName("Card")
+        card.mousePressEvent = (
+            lambda e, f=fmt, c=card:
+            self.select_format(f, c)
+        )
+        card.setObjectName("FormatCard")
         card.setCursor(Qt.CursorShape.PointingHandCursor)
-        card.setFixedHeight(90)
+        card.setFixedSize(250, 110)
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(12, 10, 12, 10)
@@ -467,25 +482,28 @@ class TubitUI(QMainWindow):
 
         # ==================================================
         # Quality
-        quality_label = QLabel(f"{quality} * {extension}")
+        quality_label = QLabel(f"{fmt['quality']} • {fmt['extension']}")
         quality_label.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        quality_label.setFixedHeight(24)
 
         # ==================================================
         # Media type
-        type_label = QLabel(media_type)
+        type_label = QLabel(fmt["media_type"])
         type_label.setStyleSheet(f"""
             color : {self.st};
             font-size : 10pt;
         """)
+        type_label.setFixedHeight(20)
 
         # ==================================================
         # Size
-        size_label = QLabel(size)
+        size_label = QLabel(fmt["size"])
         size_label.setStyleSheet(f"""
             color : {self.a};
             font-weight : 600;
             font-size : 10pt;
         """)
+        size_label.setFixedHeight(20)
 
         # ==================================================
         # Assemble
@@ -496,6 +514,94 @@ class TubitUI(QMainWindow):
 
         return card
 
+    def select_format(self, fmt, card):
+        if self.selected_card:
+            self.selected_card.setProperty("selected", False)
+            self.selected_card.style().unpolish(self.selected_card)
+            self.selected_card.style().polish(self.selected_card)
+        
+        self.selected_card = card
+        card.setProperty("selected", True)
+        card.style().unpolish(card)
+        card.style().polish(card)
+
+        self.selected_format = fmt
+
+        self.selected_format_label.setText(
+            f"{fmt['quality']} • "
+            f"{fmt['extension']} • "
+            f"{fmt['size']}"
+        )
+        self.download_btn.setEnabled(True)
+
+    def fetch_formats(self):
+        if self.backend.fetch_worker and self.backend.fetch_worker.isRunning():
+            return
+
+        url = self.url_entry.text().strip()
+        if not url:
+            return
+
+        self.fetch_btn.setEnabled(False)
+        self.fetch_btn.setText("Fetching...")
+        self.backend.fetch_formats(url)
+
+    def download_video(self):
+        if self.selected_format is None:
+            return
+
+        self.download_btn.setEnabled(False)
+        self.progress.setValue(0)
+        self.download_status_label.setText("Starting download...")
+
+        self.backend.download(self.url_entry.text().strip(), self.selected_format["format_id"])
+
+    def update_progress(self, value, status):
+        self.progress.setValue(int(value))
+        self.download_status_label.setText(status)
+
+    def download_complete(self):
+        self.progress.setValue(100)
+        self.download_btn.setEnabled(True)
+        self.download_status_label.setText("Download complete successfully.!")
+        self.fetch_btn.setEnabled(True)
+
+    def backend_error(self, mesg):
+        self.fetch_btn.setEnabled(True)
+        self.fetch_btn.setText("Fetch Available Formats")
+
+        self.download_status_label.setText(mesg)
+
+    def populate_formats(self, info, formats):
+        self.formats = formats
+        self.video_info = info
+        self.fetch_btn.setEnabled(True)
+        self.fetch_btn.setText("Fetch Available Formats")
+
+        self.video_title.setText(info.get("title", "Unknown"))
+        self.video_channel.setText(f"Channel : {info.get('uploader','Unknown')}")
+        self.video_duration.setText(f"Duration : {info.get('duration_string','--:--')}")
+
+        self.format_count.setText(str(len(formats)))
+
+        while self.grid.count():
+            item = self.grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for i, fmt in enumerate(formats):
+            card = self.format_card(fmt)
+            row = i // 2
+            col = i % 2 
+            self.grid.addWidget(card, row, col)
+
+        self.download_btn.setEnabled(False)
+        self.selected_format_label.setText("No Format Selected.!")
+        self.download_status_label.setText("Select a format to continue.")
+
+    def closeEvent(self, event):
+        self.backend.stop()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

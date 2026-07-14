@@ -37,4 +37,4 @@ EOF
 
 echo "Initializing..."
 
-python pytube.py
+python gui.py

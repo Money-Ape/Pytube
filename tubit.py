@@ -1,4 +1,4 @@
-import yt_dlp, subprocess as cmd, platform, os, re
+import yt_dlp, subprocess as cmd, platform, os, re, shutil, winreg
 from PySide6.QtCore import (QObject, QThread, Signal)
 
 def money_ape():
@@ -34,19 +34,8 @@ def OS_platform_verify():
                     print(f"{module_name} installed successfully.\n")
                 except cmd.CalledProcessError:
                     print(f"Failed to install {module_name}.\n")
-        
-        # FFMPEG path for environment variable.!
-        try:
-            spath = r"ffmpeg"
-            dpath = r"C:\\ffmpeg"
-            cmd.run(["robocopy", spath, dpath, "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/nc", "/ns", "/np"], check=True)
-            cmd.run(["setx", "/M", "Path", f"%Path%;{dpath}\\bin" ], check=True)
-            print("\033[1;32m[INFO] : ffmpeg installed successfully and path has been added to environment variable.!!")
-        except cmd.CalledProcessError as e:
-            print(f"\033[1;31m[ERROR]\033[0m: Command failed with exit code {e.returncode}\n")
-            print("\033[1;31mThe Program should be executed with Administration.!\033[0m")
-        except Exception as e:
-            print(f"\033[1;33m[WARNING]\033[0m: {e}.!")
+
+        setup_ffmpeg()
     
     elif os_var == "Linux":
         print(f"Platform Detected.! = {os_var}\n")
@@ -66,6 +55,40 @@ def OS_platform_verify():
                     print(f"Failed to install {module_name}.\n")
     else:
         print("Your Operating System isn't compatible for PYTUBE.!!")
+
+def setup_ffmpeg():
+    if shutil.which("ffmpeg"): # If Available already
+        print("ffmpeg.......ok")
+        print("ffmpeg is already available.\n")
+        return
+    
+    source = os.path.join(os.getcwd(), "ffmpeg")
+    dest = "C:\ffmpeg"
+    if not os.path.isdir(source):
+        print("Bundled FFmpeg folder not found.")
+        return
+    if not os.path.exists(dest): # Copy only if not already copied
+        print("Installing FFmpeg...")
+        cmd.run(["robocopy", source, dest, "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP"])
+
+    current_path = os.environ.get("PATH", "")
+    ffmpeg_bin = r"C:\ffmpeg\bin"
+    if ffmpeg_bin.lower() not in current_path.lower():
+        print("Adding FFmpeg to PATH...")
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, "Environment", 0,
+            winreg.KEY_ALL_ACCESS
+        )
+        value, _ = winreg.QueryValueEx(key, "Path")
+        if ffmpeg_bin.lower() not in value.lower():
+            value += ";" + ffmpeg_bin
+            winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, value)
+        
+        winreg.CloseKey(key)
+        print("Restart Windows Terminal for PATH changes.")
+    print("ffmpeg setup complete.\n")
+
+
 OS_platform_verify()
 
 def format_file_size(size):
@@ -252,10 +275,12 @@ class DownloadWorker(QThread):
         try:
             DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
             opts = {
-                "format" : f"{self.format_id}+bestaudio/best",
+                "format" : self.format_id,
                 "merge_output_format" : "mp4",
                 "outtmpl" : os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s"),
-                "progress_hooks" : [self.progress_hook]
+                "progress_hooks" : [self.progress_hook],
+                "windowsfilenames" : True,
+                "concurrent_fragment_downloads" : 4,
             }
             success = False
             with yt_dlp.YoutubeDL(opts) as tubit_ydl:

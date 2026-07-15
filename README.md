@@ -1,100 +1,139 @@
-# 🎞️ TUBIT
+# 🎞️ Tubit
 
-**Tubit** is a Python-based desktop tool to automatically download YouTube videos with the best available formats in real-time using `yt-dlp` and `ffmpeg`.
+<p align="center">
+   <img src="assets/Tubit.jpg" width="350">
+</p>
+
+<p align="center">
+   Fast • Simple • Reliable
+</p>
+
+**Tubit** is a modern Python desktop application for downloading videos from **YouTube** and **Instagram** using **yt-dlp** and **FFmpeg**. It automatically fetches available formats, allows you to choose the desired quality, and intelligently merges separate video/audio streams when required.
 
 ---
 
 ## ✨ Features
 
-- Automatically fetches available video/audio formats.
-- Provides real-time best format detection.
-- Simple and easy-to-use desktop GUI.
-- Supports multiple resolutions and formats (currently under maintenance for 2K, 4K, 8K).
+- 📺 Download videos from **YouTube**.
+- 📸 Download videos from **Instagram**.
+- 🎥 Fetch all available video and audio formats.
+- 🎯 Select the exact quality and format before downloading.
+- 🔊 Automatically merges video and audio using **FFmpeg** when necessary.
+- ⚡ Real-time download progress.
+- 🖥️ Modern desktop interface built with **PySide6**.
+- 📦 Supports MP4 and WebM formats.
+- 🔍 Displays video information including:
+  - Thumbnail
+  - Title
+  - Channel/Uploader
+  - Duration
 
 ---
 
 ## 🧩 Tech Stack
 
-- **Language**: Python
-- **GUI**: tkinter
-- **Video Library**: [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-- **Media Processing**: [ffmpeg](https://ffmpeg.org/)
+- **Language:** Python
+- **GUI:** PySide6 (Qt)
+- **Downloader:** yt-dlp
+- **Media Processing:** FFmpeg
 
 ---
 
-## 🖥️ How to Use
+## 🚀 How to Use
 
-1. **Run** `pytube-pro.py` as an Administrator.
-
-   ![Pytube Pro Overlay](Assets/image.png)
-
-2. **Paste the YouTube video URL** in the input box.
-
-   ![Video URL Input](Assets/url.png)
-
-3. **Click on "Fetch Formats"** to list the available video/audio Quality formats.
-
-   ![Fetch Formats Button](Assets/fetch.png)
-
-4. **Choose the desired Quality format**, then click on **Download Video**.
-
-   ![Download Video UI](Assets/download.png)
+1. Launch **Tubit**.
+2. Paste a supported video URL.
+3. Click **Fetch Available Formats**.
+4. Select your preferred quality.
+5. Click **Download**.
+6. Tubit will automatically:
+   - Download the selected stream.
+   - Download the best audio (if required).
+   - Merge both streams using FFmpeg.
+   - Save the final video to your **Downloads** folder.
 
 ---
 
-## 🧪 Under Development
+## 🌐 Supported Websites
 
-- Enhanced support for **2K, 4K, and 8K** formats is in progress.
-- More format filters and intelligent auto-selection will be added soon.
+Currently supported:
+
+- ✅ YouTube
+- ✅ Instagram
+
+More websites supported by **yt-dlp** may be added in future updates.
 
 ---
 
 ## 🔧 Requirements
 
-- Python 3.7+
-- `yt-dlp` and `ffmpeg` must be installed and accessible via system PATH
+- Python 3.9+
+- FFmpeg installed and available in your system PATH
 
-### 📥 Download ffmpeg
+Install dependencies:
 
-To use `ffmpeg`, download the latest stable release from the official website:
+```bash
+pip install yt-dlp PySide6
+```
 
-➡️FFmpeg : https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz
+---
 
-- After downloading, extract the archive.
-- Rename **ffmpeg-7.1.1** to **ffmpeg** so that it can be used from the terminal.
-- **ffmpeg** file should be in the same directory as **pytube-pro.py**.
+## 📥 FFmpeg
 
-⚠️ **Do not upload `ffmpeg` executable files to the GitHub repository.**  
-> They are large and exceed GitHub's 100MB file size limit. Always recommend to download them separately.
+Tubit uses **FFmpeg** to merge separate video and audio streams for high-quality downloads.
+
+Download FFmpeg from:
+
+https://ffmpeg.org/download.html
+
+After installation, ensure `ffmpeg` is accessible from your terminal:
+
+```bash
+ffmpeg -version
+```
+
+---
+
+## 🚧 Roadmap
+
+Planned features:
+
+- Playlist downloading
+- Audio-only mode
+- Download history
+- Custom download directory
+- Subtitle downloading
+- Thumbnail embedding
+- Better format filtering
+- Batch downloads
 
 ---
 
 ## 📜 License
 
-For personal/small-scale distribution, **MIT License** is recommended.  
-To use yt-dlp and ffmpeg, ensure their respective licenses (e.g., LGPL/GPL for ffmpeg) are followed.
+This project is licensed under the **MIT License**.
+
+Please also comply with the licenses of:
+
+- yt-dlp
+- FFmpeg
 
 ---
 
 ## 🙏 Credits
 
-- **yt-dlp** – A YouTube video downloading library for Python  
-  🔗 https://github.com/yt-dlp/yt-dlp
-
-- **ffmpeg** – A complete, cross-platform solution to record, convert and stream audio and video  
-  🔗 https://ffmpeg.org
+- **yt-dlp** — https://github.com/yt-dlp/yt-dlp
+- **FFmpeg** — https://ffmpeg.org
 
 ---
 
-## 📢 Note
+## 👨‍💻 Developed By
 
-> Stay tuned for more updates!  
-> Hope to develop a full-fledged working Desktop software.
+**Lovepreet Singh (Money-Ape)**
 
-> Platform : Linux {Under Development}
+GitHub:
+https://github.com/Money-Ape
+
 ---
 
-## 🧑‍💻 Developed by
-
-**Lovepreet Singh aka Money-Ape**  
-GitHub: [Money-Ape](https://github.com/Money-Ape)
+⭐ If you find Tubit useful, consider giving the repository a star!

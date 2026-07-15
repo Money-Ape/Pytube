@@ -17,7 +17,6 @@ import importlib, subprocess, sys
 
 modules = {
     "YTPackage" : "yt_dlp",
-    "Tabulate" : "tabulate",
     "PySide6" : "PySide6"
 }
 

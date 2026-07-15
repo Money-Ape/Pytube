@@ -1,15 +1,11 @@
 __pycache__/
 
 # JPG
-*.jpg 
 *.jpeg
 *.jpe
 *.jif
 *.jfif
 *.jfi
-
-# PNG
-*.png
 
 # GIF
 *.gif

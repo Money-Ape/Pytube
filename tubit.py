@@ -19,7 +19,7 @@ def OS_platform_verify():
     os_var = current_os
     if os_var == "Windows":
         print(f"Platform Detected.! = {os_var}\n")
-        module_names = ["yt_dlp", "tabulate", "PySide6"]
+        module_names = ["yt_dlp", "PySide6"]
         for module_name in module_names:
             try:
                 __import__(module_name)
@@ -50,7 +50,7 @@ def OS_platform_verify():
     
     elif os_var == "Linux":
         print(f"Platform Detected.! = {os_var}\n")
-        module_names = ["yt_dlp", "tabulate", "tkinter"]
+        module_names = ["yt_dlp", "PySide6"]
         for module_name in module_names:
             try:
                 __import__(module_name)
@@ -142,6 +142,8 @@ class FetchWorker(QThread):
                     "media_type" : media_type,
                     "codec" : vcodec,
                     "height" : height or 0,
+                    "has_audio" : acodec != "none",
+                    "has_video" : vcodec != "none",
                 })
 
             formats.sort(key=lambda x: (
@@ -171,6 +173,9 @@ class TubitBack(QObject):
         self.download_worker = None
 
     def fetch_formats(self, url):
+        if self.fetch_worker and self.fetch_worker.isRunning():
+            return
+
         self.fetch_worker = FetchWorker(url)
 
         self.fetch_worker.finished.connect(self.formats_loaded.emit)
@@ -188,6 +193,7 @@ class TubitBack(QObject):
     def download(self, url, format_id):
         if self.download_worker and self.download_worker.isRunning():
             return
+
         self.download_worker = DownloadWorker(url, format_id)
 
         self.download_worker.progress.connect(self.download_progress.emit)
@@ -205,11 +211,9 @@ class TubitBack(QObject):
 
     def stop(self):
         if self.fetch_worker and self.fetch_worker.isRunning():
-            self.fetch_worker.quit()
             self.fetch_worker.wait()
 
         if self.download_worker and self.download_worker.isRunning():
-            self.download_worker.quit()
             self.download_worker.wait()
 
 class DownloadWorker(QThread):
@@ -226,11 +230,14 @@ class DownloadWorker(QThread):
 
     def progress_hook(self, d):
         if d["status"] == "downloading":
-            percent_text = d.get("_percent_str", "0%")
-            ansi = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]", percent_text)
-            value = float(ansi.group(1)) if ansi else 0
+            ansi = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+            percent_text = ansi.sub("", d.get("_percent_str", "0%"))
+            match = re.search(r"(\d+(?:\.\d+)?)", percent_text)
+            value = float(match.group(1)) if match else 0.0
+
             speed = ansi.sub("", d.get("_speed_str", ""))
             eta = ansi.sub("", d.get("_eta_str", ""))
+
             status = f"{value:.1f}%"
 
             if speed:
@@ -245,14 +252,18 @@ class DownloadWorker(QThread):
         try:
             DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
             opts = {
-                "format" : self.format_id,
+                "format" : f"{self.format_id}+bestaudio/best",
+                "merge_output_format" : "mp4",
                 "outtmpl" : os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s"),
                 "progress_hooks" : [self.progress_hook]
             }
+            success = False
             with yt_dlp.YoutubeDL(opts) as tubit_ydl:
                 tubit_ydl.download([self.url])
+                success = True
 
-            self.finished.emit() # Only now is the worker truly finished.
+            if success:
+                self.finished.emit() # Only now is the worker truly finished.
         
         except Exception as e:
             self.error.emit(str(e))

@@ -1,7 +1,8 @@
-import sys, os, urllib.request, tempfile
+import sys, os
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QLineEdit, QPushButton, QScrollArea, QGridLayout, QSizePolicy, QProgressBar)
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QIcon, QFont, QPixmap
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from theme import THEMES
 from tubit import TubitBack
 
@@ -25,6 +26,9 @@ class TubitUI(QMainWindow):
         self.backend = TubitBack()
         self.selected_format = None
         self.selected_card = None
+        self.net = QNetworkAccessManager(self)
+        self.net.finished.connect(self.thumbnail_loaded)
+
         self.backend.formats_loaded.connect(self.populate_formats)
         self.backend.error.connect(self.backend_error)
         self.backend.download_progress.connect(self.update_progress)
@@ -186,12 +190,12 @@ class TubitUI(QMainWindow):
 
         # ==================================================
         # TItle
-        title = QLabel("Youtube Video Downloader")
+        title = QLabel("Video Downloader")
         title.setFont(QFont("Segoe UI", 24, QFont.Bold))
 
         # ==================================================
         # SubTitle
-        subtitle = QLabel("Fast • Simple • Reliable")
+        subtitle = QLabel("Youtube | Instagram\nFast • Simple • Reliable")
         subtitle.setStyleSheet(f"""
             color : {self.st};
             font-size : 11pt;
@@ -468,6 +472,8 @@ class TubitUI(QMainWindow):
             self.video_title.setText("No video loaded.!")
             self.video_channel.setText("Channel : ---")
             self.video_duration.setText("Duration : --:--")
+            self.thumbnail.clear()
+            self.thumbnail.setText("Thumbnail")
 
         else:
             self.fetch_btn.show()
@@ -559,6 +565,42 @@ class TubitUI(QMainWindow):
         self.fetch_btn.setText("Fetching...")
         self.backend.fetch_formats(url)
 
+    def load_thumbnail(self, url):
+        if not url:
+            self.thumbnail.clear()
+            self.thumbnail.setText("Thumbnail")
+            return
+        
+        request = QNetworkRequest(QUrl(url))
+        self.net.get(request)
+
+    def thumbnail_loaded(self, reply):
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+            self.thumbnail.clear()
+            self.thumbnail.setText("Thumbnail")
+            reply.deleteLater()
+            return
+        
+        data = reply.readAll()
+        pix = QPixmap()
+        pix.loadFromData(data)
+        if not pix.isNull():
+            self.thumbnail.setPixmap(
+                pix.scaled(
+                    self.thumbnail.width(),
+                    self.thumbnail.height(),       
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+            )
+            self.thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        else:
+            self.thumbnail.clear()
+            self.thumbnail.setText("Thumbnail")
+        
+        reply.deleteLater()
+
     def download_video(self):
         if self.selected_format is None:
             return
@@ -568,7 +610,14 @@ class TubitUI(QMainWindow):
         self.progress.setValue(0)
         self.download_status_label.setText("Starting download...")
 
-        self.backend.download(self.url_entry.text().strip(), self.selected_format["format_id"])
+        if self.selected_format["has_audio"]:
+            format_string = self.selected_format["format_id"]
+
+        else:
+            format_string = (
+                f"{self.selected_format['format_id']}+bestaudio/best"
+            )
+        self.backend.download(self.url_entry.text().strip(), format_string)
 
     def update_progress(self, value, status):
         self.progress.setValue(int(value))
@@ -583,6 +632,8 @@ class TubitUI(QMainWindow):
 
     def backend_error(self, mesg):
         self.fetch_btn.setEnabled(True)
+        self.thumbnail.clear()
+        self.thumbnail.setText("Thumbnail")
         self.download_btn.setEnabled(True)
         self.fetch_btn.setText("Fetch Available Formats")
 
@@ -603,6 +654,7 @@ class TubitUI(QMainWindow):
         self.video_title.setText(info.get("title", "Unknown"))
         self.video_channel.setText(f"Channel : {info.get('uploader','Unknown')}")
         self.video_duration.setText(f"Duration : {info.get('duration_string','--:--')}")
+        self.load_thumbnail(info.get("thumbnail"))
 
         self.format_count.setText(str(len(formats)))
 

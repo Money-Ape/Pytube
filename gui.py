@@ -228,7 +228,7 @@ class TubitUI(QMainWindow):
 
         # ==================================================
         # URL title
-        url_title = QLabel("🔗 YouTube URL")
+        url_title = QLabel("🔗 URL (Youtube | Instagram)")
         url_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
 
         # ==================================================

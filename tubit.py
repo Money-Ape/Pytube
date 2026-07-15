@@ -1,4 +1,4 @@
-import yt_dlp, subprocess as cmd, platform, os, re, shutil, winreg, sys
+import yt_dlp, subprocess as cmd, platform, os, re, shutil, sys
 from PySide6.QtCore import (QObject, QThread, Signal)
 
 def resource_path(relative_path):
@@ -69,6 +69,8 @@ def OS_platform_verify():
         print("Your Operating System isn't compatible for PYTUBE.!!")
 
 def setup_ffmpeg():
+    import winreg
+
     if shutil.which("ffmpeg"): # If Available already
         print("ffmpeg.......ok")
         print("ffmpeg is already available.\n")

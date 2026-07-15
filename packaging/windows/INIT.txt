@@ -1,0 +1,35 @@
+Welcome to Tubit!
+
+If this is your first launch, please verify the following:
+
+✓ Internet connection is available.
+✓ FFmpeg is installed and detected.
+✓ yt-dlp is functioning correctly.
+
+Supported Websites
+------------------
+• YouTube
+• Instagram
+
+How to Download
+---------------
+1. Paste a supported video URL.
+2. Click "Fetch Available Formats".
+3. Select a format.
+4. Click "Download".
+
+Notes
+-----
+• High-resolution videos may be downloaded as separate video and audio streams and merged automatically using FFmpeg.
+• Some Windows media players may not play Opus audio correctly. If audio is missing in Windows Media Player, try VLC Media Player. The downloaded file itself is usually valid.
+
+Troubleshooting
+---------------
+• Ensure your internet connection is active.
+• Verify FFmpeg is available in your PATH.
+• Keep yt-dlp updated for the latest website compatibility.
+
+Thank you for using Tubit!
+
+GitHub:
+https://github.com/Money-Ape/Tubit

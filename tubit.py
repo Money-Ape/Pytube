@@ -1,5 +1,17 @@
-import yt_dlp, subprocess as cmd, platform, os, re, shutil, winreg
+import yt_dlp, subprocess as cmd, platform, os, re, shutil, winreg, sys
 from PySide6.QtCore import (QObject, QThread, Signal)
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+FFMPEG_DIR = resource_path("ffmpeg/bin")
+FFMPEG_EXE = os.path.join(FFMPEG_DIR, "ffmpeg.exe")
+FFPROBE_EXE = os.path.join(FFMPEG_DIR, "ffprobe.exe")
 
 def money_ape():
     print(r" __  __                              _                 ")
@@ -276,6 +288,7 @@ class DownloadWorker(QThread):
             DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
             opts = {
                 "format" : self.format_id,
+                "ffmpeg_location" : FFMPEG_DIR,
                 "merge_output_format" : "mp4",
                 "outtmpl" : os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s"),
                 "progress_hooks" : [self.progress_hook],

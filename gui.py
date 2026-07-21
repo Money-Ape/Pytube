@@ -86,6 +86,10 @@ class TubitUI(QMainWindow):
                 background : #384455;
                 border : 2px solid {self.a};
             }}
+            QFrame#FormatCard:hover {{
+                border:2px solid #6E87A5;
+                background:#303A46;
+            }}
             QLineEdit {{
                 background : {self.i};
                 border : 1px solid {self.b};

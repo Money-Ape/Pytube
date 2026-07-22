@@ -1,5 +1,5 @@
 #define MyAppName "Tubit"
-#define MyAppVersion "1.2"
+#define MyAppVersion "1.3"
 #define MyAppPublisher "Lovepreet Singh (Money-Ape)"
 #define MyAppURL "https://github.com/Money-Ape"
 #define MyAppExeName "Tubit.exe"

@@ -229,11 +229,11 @@ class TubitBack(QObject):
 
         self.fetch_worker.start()
 
-    def download(self, url, format_id):
+    def download(self, url, format_id, download_dir):
         if self.download_worker and self.download_worker.isRunning():
             return
 
-        self.download_worker = DownloadWorker(url, format_id)
+        self.download_worker = DownloadWorker(url, format_id, download_dir)
 
         self.download_worker.progress.connect(self.download_progress.emit)
         self.download_worker.finished.connect(self.download_finished.emit)
@@ -261,11 +261,12 @@ class DownloadWorker(QThread):
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, url, format_id):
+    def __init__(self, url, format_id, download_dir):
         super().__init__()
 
         self.url = url
         self.format_id = format_id
+        self.download_dir = download_dir
 
     def progress_hook(self, d):
         if d["status"] == "downloading":
@@ -289,11 +290,10 @@ class DownloadWorker(QThread):
 
     def run(self):
         try:
-            DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
             opts = {
                 "format" : self.format_id,
                 "merge_output_format" : "mp4",
-                "outtmpl" : os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s"),
+                "outtmpl" : os.path.join(self.download_dir, "%(title)s.%(ext)s"),
                 "progress_hooks" : [self.progress_hook],
                 "windowsfilenames" : True,
                 "concurrent_fragment_downloads" : 4,

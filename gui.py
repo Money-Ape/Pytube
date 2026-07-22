@@ -1,5 +1,5 @@
 import sys, os
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QLineEdit, QPushButton, QScrollArea, QGridLayout, QSizePolicy, QProgressBar, QButtonGroup, QRadioButton)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QLineEdit, QPushButton, QScrollArea, QGridLayout, QFileDialog, QProgressBar, QButtonGroup, QRadioButton)
 from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QIcon, QFont, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -21,6 +21,7 @@ class TubitUI(QMainWindow):
 
         self.format_mode = "video"
         self.all_formats = []
+        self.download_dir = os.path.join(os.path.expanduser("~"), "Downloads")
 
         self.setup_window()
         self.apply_theme()
@@ -380,6 +381,31 @@ class TubitUI(QMainWindow):
         self.selected_format_label.setFont(QFont("Segoe UI", 11, QFont.Bold))
 
         # ==================================================
+        # Download location
+        self.loc_title = QLabel("Save")
+        self.loc_title.setStyleSheet(f"""
+            color : {self.st};
+            font-size : 10pt;
+        """)
+
+        loc_row = QHBoxLayout()
+
+        self.loc_entry = QLineEdit()
+        self.loc_entry.setReadOnly(True)
+        self.loc_entry.setText(self.download_dir)
+
+        self.browse_btn = QPushButton("Browse")
+        self.browse_btn.setFixedWidth(100)
+        self.browse_btn.clicked.connect(self.select_download_dir)
+
+        loc_row.addWidget(self.loc_entry)
+        loc_row.addWidget(self.browse_btn)
+
+        self.loc_title.hide()
+        self.loc_entry.hide()
+        self.browse_btn.hide()
+
+        # ==================================================
         # Download button
         self.download_btn = QPushButton("Download")
         self.download_btn.setMinimumHeight(36)
@@ -413,6 +439,10 @@ class TubitUI(QMainWindow):
 
         download_layout.addWidget(self.download_btn)
         download_layout.addSpacing(6)
+
+        download_layout.addWidget(self.loc_title)
+        download_layout.addLayout(loc_row)
+        download_layout.addSpacing(5)
 
         download_layout.addWidget(self.progress)
         download_layout.addWidget(self.download_status_label)
@@ -593,6 +623,9 @@ class TubitUI(QMainWindow):
             f"{fmt['size']}"
         )
         self.download_btn.setEnabled(True)
+        self.loc_title.show()
+        self.loc_entry.show()
+        self.browse_btn.show()
 
     def fetch_formats(self):
         if self.backend.fetch_worker and self.backend.fetch_worker.isRunning():
@@ -660,7 +693,15 @@ class TubitUI(QMainWindow):
         else:
             format_string = self.selected_format["format_id"]
 
-        self.backend.download(self.url_entry.text().strip(), format_string)
+        self.backend.download(self.url_entry.text().strip(), format_string, self.download_dir)
+
+    def select_download_dir(self):
+        dir = QFileDialog.getExistingDirectory(
+            self, "Select Download Folder", self.download_dir
+        )
+        if dir:
+            self.download_dir = dir
+            self.loc_entry.setText(dir)
 
     def update_progress(self, value, status):
         self.progress.setValue(int(value))

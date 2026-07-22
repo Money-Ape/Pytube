@@ -19,6 +19,7 @@
 - 🎥 Fetch all available video and audio formats.
 - 🎛️ Choose between Video, Video Only, and Audio Only download modes.
 - 🎯 Select the exact quality before downloading.
+- 📁 Choose where downloaded files are saved.
 - 🔍 Smart format filtering for easier selection.
 - 🔊 Automatically merges video and audio using **FFmpeg** when necessary.
 - ⚡ Real-time download progress.
@@ -56,8 +57,9 @@
    • Video Only
    • Audio Only
 5. Select your preferred quality.
-6. Click **Download**.
-7. Tubit will automatically:
+6. (Optional) Choose a download location using Browse.
+7. Click **Download**.
+8. Tubit will automatically:
    • Merge best audio (Video mode)
    • Download only video (Video Only)
    • Download only audio (Audio Only)
@@ -104,7 +106,7 @@ https://ffmpeg.org/download.html
 Run the provided installation script to install FFmpeg and all required dependencies:
 
 ```bash
-./install.sh
+./run.sh
 ```
 
 To verify that FFmpeg is installed correctly:
@@ -121,7 +123,6 @@ Planned features:
 
 - Playlist downloading
 - Download history
-- Custom download directory
 - Subtitle downloading
 - Thumbnail embedding
 - Batch downloads

@@ -13,6 +13,18 @@ FFMPEG_DIR = resource_path("ffmpeg/bin")
 FFMPEG_EXE = os.path.join(FFMPEG_DIR, "ffmpeg.exe")
 FFPROBE_EXE = os.path.join(FFMPEG_DIR, "ffprobe.exe")
 
+def get_ffmpeg_loc():
+    # Bundled FFmpeg (Windows executable)
+    if os.path.isdir(FFMPEG_DIR):
+        return FFMPEG_DIR
+
+    # Linux / macOS system ffmpeg
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return os.path.dirname(ffmpeg)
+    
+    return None
+
 def money_ape():
     print(r" __  __                              _                 ")
     print(r"|  \/  | ___  _ __   ___ _   _      / \   _ __   ___   ")
@@ -149,15 +161,6 @@ class FetchWorker(QThread):
                 vcodec = fmt.get("vcodec", "none")
                 acodec = fmt.get("acodec", "none")
 
-                media_type = (
-                    "Video + Audio"
-                    if vcodec != "none" and acodec != "none"
-                    else
-                    "Video Only"
-                    if vcodec != "none"
-                    else
-                    "Audio Only"
-                )
                 key = (
                     height,
                     fmt.get("ext"),
@@ -176,7 +179,6 @@ class FetchWorker(QThread):
                     "extension" : fmt.get("ext", "Unknown").upper(),
 
                     "size" : format_file_size(filesize),
-                    "media_type" : media_type,
                     "codec" : vcodec,
                     "height" : height or 0,
                     "has_audio" : acodec != "none",
@@ -184,7 +186,7 @@ class FetchWorker(QThread):
                 })
 
             formats.sort(key=lambda x: (
-                x["media_type"] == "Audio", -x["height"]
+                not x["has_video"], -x["height"]
                 )
             )
             self.finished.emit(info, formats)
@@ -290,13 +292,17 @@ class DownloadWorker(QThread):
             DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
             opts = {
                 "format" : self.format_id,
-                "ffmpeg_location" : FFMPEG_DIR,
                 "merge_output_format" : "mp4",
                 "outtmpl" : os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s"),
                 "progress_hooks" : [self.progress_hook],
                 "windowsfilenames" : True,
                 "concurrent_fragment_downloads" : 4,
             }
+
+            ffmpeg = get_ffmpeg_loc()
+            if ffmpeg:
+                opts["ffmpeg_location"] = ffmpeg
+
             success = False
             with yt_dlp.YoutubeDL(opts) as tubit_ydl:
                 tubit_ydl.download([self.url])

@@ -1,5 +1,5 @@
 import sys, os
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QLineEdit, QPushButton, QScrollArea, QGridLayout, QSizePolicy, QProgressBar)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QLineEdit, QPushButton, QScrollArea, QGridLayout, QSizePolicy, QProgressBar, QButtonGroup, QRadioButton)
 from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QIcon, QFont, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -18,6 +18,9 @@ class TubitUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.theme = THEMES["blue_gray"]
+
+        self.format_mode = "video"
+        self.all_formats = []
 
         self.setup_window()
         self.apply_theme()
@@ -259,6 +262,19 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Format card
         formats_card = QFrame()
+
+        formats_line_1 = QFrame()
+        formats_line_1.setFrameShape(QFrame.Shape.HLine)
+        formats_line_1.setStyleSheet(f"""
+            color:{self.b};
+        """)
+
+        formats_line_2 = QFrame()
+        formats_line_2.setFrameShape(QFrame.Shape.HLine)
+        formats_line_2.setStyleSheet(f"""
+            color:{self.b};
+        """)
+
         formats_card.setObjectName("Card")
         formats_layout = QVBoxLayout(formats_card)
         formats_layout.setContentsMargins(20, 20, 20, 20)
@@ -424,6 +440,32 @@ class TubitUI(QMainWindow):
         formats_header_layout.addWidget(self.format_count)
 
         # ==================================================
+        # filter Formats
+        self.filter_group = QButtonGroup(self)
+
+        self.video_btn = QRadioButton("Video")
+        self.video_only_btn = QRadioButton("Video Only")
+        self.audio_only_btn = QRadioButton("Audio Only")
+
+        self.video_btn.setChecked(True)
+
+        self.filter_group.addButton(self.video_btn)
+        self.filter_group.addButton(self.video_only_btn)
+        self.filter_group.addButton(self.audio_only_btn)
+
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(20)
+
+        filter_row.addWidget(self.video_btn)
+        filter_row.addWidget(self.video_only_btn)
+        filter_row.addWidget(self.audio_only_btn)
+        filter_row.addStretch()
+
+        self.video_btn.toggled.connect(self.filter_formats)
+        self.video_only_btn.toggled.connect(self.filter_formats)
+        self.audio_only_btn.toggled.connect(self.filter_formats)
+
+        # ==================================================
         # Scroll area
         self.format_scroll = QScrollArea()
         self.format_scroll.setMinimumHeight(400)
@@ -455,7 +497,10 @@ class TubitUI(QMainWindow):
             0, 0, 1, 2
         )
         formats_layout.addWidget(formats_header)
+        formats_layout.addLayout(filter_row)
+        formats_layout.addWidget(formats_line_1)
         formats_layout.addWidget(self.format_scroll)
+        formats_layout.addWidget(formats_line_2)
 
         # ==================================================
         # Assemble
@@ -504,18 +549,11 @@ class TubitUI(QMainWindow):
 
         # ==================================================
         # Media type
-        type_label = QLabel(fmt["media_type"])
         codec_label = QLabel(fmt["codec"].upper())
         codec_label.setStyleSheet(f"""
             color:{self.st};
             font-size:9pt;
         """)
-
-        type_label.setStyleSheet(f"""
-            color : {self.st};
-            font-size : 10pt;
-        """)
-        type_label.setFixedHeight(20)
 
         # ==================================================
         # Size
@@ -531,7 +569,6 @@ class TubitUI(QMainWindow):
         # Assemble
         layout.addWidget(quality_label)
         layout.addWidget(codec_label)
-        layout.addWidget(type_label)
         layout.addStretch()
         layout.addWidget(size_label)
 
@@ -614,13 +651,15 @@ class TubitUI(QMainWindow):
         self.progress.setValue(0)
         self.download_status_label.setText("Starting download...")
 
-        if self.selected_format["has_audio"]:
+        if self.format_mode == "video":
+            format_string = (f"{self.selected_format['format_id']}+bestaudio/best")
+
+        elif self.format_mode == "video_only":
             format_string = self.selected_format["format_id"]
 
         else:
-            format_string = (
-                f"{self.selected_format['format_id']}+bestaudio/best"
-            )
+            format_string = self.selected_format["format_id"]
+
         self.backend.download(self.url_entry.text().strip(), format_string)
 
     def update_progress(self, value, status):
@@ -643,8 +682,59 @@ class TubitUI(QMainWindow):
 
         self.download_status_label.setText(mesg)
 
+    def filter_formats(self):
+        self.selected_format = None
+        self.selected_card = None
+        self.download_btn.setEnabled(False)
+        self.selected_format_label.setText("No Formats Selected.!")
+        if self.video_btn.isChecked():
+            self.format_mode = "video"
+
+        elif self.video_only_btn.isChecked():
+            self.format_mode = "video_only"
+
+        else:
+            self.format_mode = "audio_only"
+
+        while self.grid.count():
+            item = self.grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        visible = []
+        if self.format_mode == "video":
+            visible = [
+                fmt for fmt in self.all_formats
+                if fmt["has_video"]
+            ]
+
+        elif self.format_mode == "video_only":
+            visible = [
+                fmt for fmt in self.all_formats
+                if fmt["has_video"]
+            ]
+
+        else:
+            visible = [
+                fmt for fmt in self.all_formats
+                if fmt["has_audio"] and not fmt["has_video"]
+            ]
+
+        self.format_count.setText(str(len(visible)))
+        if not visible:
+            self.grid.addWidget(
+                QLabel("No Formats Available.!"), 0, 0
+            )
+            return
+        
+        for i, fmt in enumerate(visible):
+            card = self.format_card(fmt)
+            row = i // 2
+            col = i % 2 
+            self.grid.addWidget(card, row, col)
+
     def populate_formats(self, info, formats):
-        self.formats = formats
+        self.all_formats = formats
         self.video_info = info
 
         self.selected_format = None
@@ -660,18 +750,12 @@ class TubitUI(QMainWindow):
         self.video_duration.setText(f"Duration : {info.get('duration_string','--:--')}")
         self.load_thumbnail(info.get("thumbnail"))
 
-        self.format_count.setText(str(len(formats)))
-
         while self.grid.count():
             item = self.grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        for i, fmt in enumerate(formats):
-            card = self.format_card(fmt)
-            row = i // 2
-            col = i % 2 
-            self.grid.addWidget(card, row, col)
+        self.filter_formats()
 
         self.download_btn.setEnabled(False)
         self.selected_format_label.setText("No Format Selected.!")

@@ -8,7 +8,7 @@
    Fast • Simple • Reliable
 </p>
 
-**Tubit** is a modern Python desktop application for downloading videos from **YouTube** and **Instagram** using **yt-dlp** and **FFmpeg**. It automatically fetches available formats, allows you to choose the desired quality, and intelligently merges separate video/audio streams when required.
+**Tubit** is a modern Python desktop application for downloading videos from **YouTube** and **Instagram** using **yt-dlp** and **FFmpeg**. It automatically fetches available formats, lets you choose between Video, Video Only, or Audio Only download modes, and intelligently merges separate video and audio streams when required.
 
 ---
 
@@ -17,7 +17,9 @@
 - 📺 Download videos from **YouTube**.
 - 📸 Download videos from **Instagram**.
 - 🎥 Fetch all available video and audio formats.
-- 🎯 Select the exact quality and format before downloading.
+- 🎛️ Choose between Video, Video Only, and Audio Only download modes.
+- 🎯 Select the exact quality before downloading.
+- 🔍 Smart format filtering for easier selection.
 - 🔊 Automatically merges video and audio using **FFmpeg** when necessary.
 - ⚡ Real-time download progress.
 - 🖥️ Modern desktop interface built with **PySide6**.
@@ -39,18 +41,26 @@
 
 ---
 
+<p align="center">
+  <img src="assets/Tubit_main_window.png" alt="Tubit Main Window" width="900">
+</p>
+
+---
 ## 🚀 How to Use
 
 1. Launch **Tubit**.
 2. Paste a supported video URL.
 3. Click **Fetch Available Formats**.
-4. Select your preferred quality.
-5. Click **Download**.
-6. Tubit will automatically:
-   - Download the selected stream.
-   - Download the best audio (if required).
-   - Merge both streams using FFmpeg.
-   - Save the final video to your **Downloads** folder.
+4. Choose a download mode:
+   • Video
+   • Video Only
+   • Audio Only
+5. Select your preferred quality.
+6. Click **Download**.
+7. Tubit will automatically:
+   • Merge best audio (Video mode)
+   • Download only video (Video Only)
+   • Download only audio (Audio Only)
 
 ---
 
@@ -68,13 +78,12 @@ More websites supported by **yt-dlp** may be added in future updates.
 ## 🔧 Requirements
 
 - Python 3.9+
-- FFmpeg installed and available in your system PATH
 
-Install dependencies:
+- Windows:
+  - No additional setup required (FFmpeg is bundled with the release).
 
-```bash
-pip install yt-dlp PySide6
-```
+- Linux:
+  - Run run.sh to install all required dependencies including FFmpeg.
 
 ---
 
@@ -82,11 +91,23 @@ pip install yt-dlp PySide6
 
 Tubit uses **FFmpeg** to merge separate video and audio streams for high-quality downloads.
 
-Download FFmpeg from:
+### Windows
+
+The official Windows release bundles **FFmpeg** automatically, so no additional installation is required.
+
+If you are running Tubit from source or prefer using your own FFmpeg installation, you can download it from:
 
 https://ffmpeg.org/download.html
 
-After installation, ensure `ffmpeg` is accessible from your terminal:
+### Linux
+
+Run the provided installation script to install FFmpeg and all required dependencies:
+
+```bash
+./install.sh
+```
+
+To verify that FFmpeg is installed correctly:
 
 ```bash
 ffmpeg -version
@@ -99,12 +120,10 @@ ffmpeg -version
 Planned features:
 
 - Playlist downloading
-- Audio-only mode
 - Download history
 - Custom download directory
 - Subtitle downloading
 - Thumbnail embedding
-- Better format filtering
 - Batch downloads
 
 ---

@@ -176,7 +176,7 @@ class TubitUI(QMainWindow):
         header.setStyleSheet("background : transparent;")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(15)
+        header_layout.setSpacing(8)
         header_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # ==================================================
@@ -213,7 +213,7 @@ class TubitUI(QMainWindow):
         # Layout
         main_layout = QVBoxLayout(self.page)
         main_layout.setContentsMargins(25, 20, 25, 25)
-        main_layout.setSpacing(24)
+        main_layout.setSpacing(12)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # ==================================================
@@ -231,7 +231,7 @@ class TubitUI(QMainWindow):
         url_card.setObjectName("Card")
         url_layout = QVBoxLayout(url_card)
         url_layout.setContentsMargins(20, 20, 20, 20)
-        url_layout.setSpacing(15)
+        url_layout.setSpacing(6)
 
         # ==================================================
         # URL title
@@ -278,7 +278,7 @@ class TubitUI(QMainWindow):
         formats_card.setObjectName("Card")
         formats_layout = QVBoxLayout(formats_card)
         formats_layout.setContentsMargins(20, 20, 20, 20)
-        formats_layout.setSpacing(15)
+        formats_layout.setSpacing(6)
 
         # ==================================================
         # ==================================================
@@ -288,7 +288,7 @@ class TubitUI(QMainWindow):
 
         video_layout = QVBoxLayout(video_card)
         video_layout.setContentsMargins(16, 16, 16, 16)
-        video_layout.setSpacing(15)
+        video_layout.setSpacing(6)
 
         # ==================================================
         # Video header
@@ -300,7 +300,7 @@ class TubitUI(QMainWindow):
         video_info = QWidget()
         video_info_layout = QHBoxLayout(video_info)
         video_info_layout.setContentsMargins(0, 0, 0, 0)
-        video_info_layout.setSpacing(15)
+        video_info_layout.setSpacing(8)
 
         # ==================================================
         # Thumnail placeholder
@@ -321,7 +321,7 @@ class TubitUI(QMainWindow):
         details = QWidget()
         details_layout = QVBoxLayout(details)
         details_layout.setContentsMargins(0, 0, 0, 0)
-        details_layout.setSpacing(6)
+        details_layout.setSpacing(5)
 
         # Video title
         self.video_title = QLabel("No video loaded.!")
@@ -361,7 +361,7 @@ class TubitUI(QMainWindow):
         download_card.setObjectName("Card")
         download_layout = QVBoxLayout(download_card)
         download_layout.setContentsMargins(20, 20, 20, 20)
-        download_layout.setSpacing(15)
+        download_layout.setSpacing(6)
 
         # ==================================================
         # Header
@@ -412,7 +412,7 @@ class TubitUI(QMainWindow):
         download_layout.addSpacing(5)
 
         download_layout.addWidget(self.download_btn)
-        download_layout.addSpacing(8)
+        download_layout.addSpacing(6)
 
         download_layout.addWidget(self.progress)
         download_layout.addWidget(self.download_status_label)
@@ -424,7 +424,7 @@ class TubitUI(QMainWindow):
         formats_header.setStyleSheet("background : transparent;")
         formats_header_layout = QHBoxLayout(formats_header)
         formats_header_layout.setContentsMargins(0, 0, 0, 0)
-        formats_header_layout.setSpacing(10)
+        formats_header_layout.setSpacing(8)
 
         # ==================================================
         # Format title
@@ -454,7 +454,7 @@ class TubitUI(QMainWindow):
         self.filter_group.addButton(self.audio_only_btn)
 
         filter_row = QHBoxLayout()
-        filter_row.setSpacing(20)
+        filter_row.setSpacing(10)
 
         filter_row.addWidget(self.video_btn)
         filter_row.addWidget(self.video_only_btn)
@@ -468,7 +468,7 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Scroll area
         self.format_scroll = QScrollArea()
-        self.format_scroll.setMinimumHeight(400)
+        self.format_scroll.setMinimumHeight(350)
         self.format_scroll.setWidgetResizable(True)
         self.format_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.format_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -478,7 +478,7 @@ class TubitUI(QMainWindow):
         self.format_ctn = QWidget()
         self.grid = QGridLayout(self.format_ctn)
         self.grid.setContentsMargins(0, 0, 0, 0)
-        self.grid.setSpacing(12)
+        self.grid.setSpacing(10)
 
         self.format_scroll.setWidget(self.format_ctn)
 
@@ -538,8 +538,8 @@ class TubitUI(QMainWindow):
         card.setFixedSize(250, 110)
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(4)
+        layout.setContentsMargins(10, 9, 10, 9)
+        layout.setSpacing(2)
 
         # ==================================================
         # Quality

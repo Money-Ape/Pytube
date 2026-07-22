@@ -17,7 +17,8 @@ import importlib, subprocess, sys
 
 modules = {
     "YTPackage" : "yt_dlp",
-    "PySide6" : "PySide6"
+    "PySide6" : "PySide6",
+    "FFMPEG" : "ffmpeg"
 }
 
 missing = []

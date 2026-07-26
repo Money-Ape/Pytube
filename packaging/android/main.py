@@ -26,7 +26,7 @@ Packaging (buildozer.spec requirements, roughly):
     requirements = python3,kivy,yt-dlp,certifi,pyjnius,android
     android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
 
-Run this file directly on a desktop with `python tubit_android.py` to test
+Run this file directly on a desktop with `python main.py` to test
 the UI before building the APK; the android-only imports are skipped there.
 """
 

@@ -5,6 +5,9 @@ ffmpeg/
 *.spec
 *.exe
 
+.buildozer
+bin/
+
 # JPG
 *.jpeg
 *.jpe

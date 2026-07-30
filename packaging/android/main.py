@@ -1,38 +1,3 @@
-"""
-Tubit - Android port (Kivy)
-
-Ports the desktop PySide6 app (gui.py + tubit.py) to a single-file Kivy app
-that can be packaged for Android with Buildozer.
-
-Key differences from the desktop version, and why:
-
-- No winreg / robocopy / Windows ffmpeg install: none of that exists on Android.
-- No guaranteed system "ffmpeg" binary on a phone. Merging a separate
-  video-only stream with a separate audio-only stream (the "1080p+bestaudio"
-  trick the desktop app uses) needs ffmpeg. Rather than silently failing on
-  device, this build only lists formats that already contain both video and
-  audio in one stream ("progressive" formats), plus audio-only formats.
-  If you bundle the p4a ffmpeg recipe and confirm a working `ffmpeg` binary
-  is on PATH inside the app, you can re-enable merging (see
-  ALLOW_STREAM_MERGE below). The "Video Only" filter is kept for visual
-  parity with desktop; it will simply show "No formats available" until
-  ALLOW_STREAM_MERGE is turned on, same as desktop would with no ffmpeg.
-- QThread/Signal -> threading.Thread + Clock.schedule_once, since Kivy
-  widgets must only be touched from the main thread.
-- QNetworkAccessManager thumbnail loading -> Kivy's AsyncImage widget.
-- Native file dialog for choosing a download folder -> Android apps don't
-  get an arbitrary folder picker without extra plugins, so this build
-  downloads to the app's external storage "Download" folder automatically
-  (shown read-only in the Download card, mirroring desktop's "Save" row).
-
-Packaging (buildozer.spec requirements, roughly):
-    requirements = python3,kivy,yt-dlp,certifi,pyjnius,android
-    android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
-
-Run this file directly on a desktop with `python main.py` to test
-the UI before building the APK; the android-only imports are skipped there.
-"""
-
 import os
 import re
 import sys

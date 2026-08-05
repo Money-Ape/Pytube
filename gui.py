@@ -306,7 +306,7 @@ class TubitUI(QMainWindow):
         # ==================================================
         # Thumnail placeholder
         self.thumbnail = QLabel()
-        self.thumbnail.setFixedSize(96, 54)
+        self.thumbnail.setFixedSize(150, 86)
         self.thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.thumbnail.setStyleSheet(f"""

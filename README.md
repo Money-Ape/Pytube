@@ -1,7 +1,7 @@
 # 🎞️ Tubit
 
 <p align="center">
-   <img src="assets/Tubit.jpg" width="350">
+   <img src="assets/Tubit.png" width="350">
 </p>
 
 <p align="center">

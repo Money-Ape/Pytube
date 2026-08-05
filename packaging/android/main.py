@@ -1,8 +1,4 @@
-import os
-import re
-import sys
-import threading
-
+import os, re, sys, threading, yt_dlp
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
@@ -19,16 +15,12 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 from kivy.utils import get_color_from_hex, platform
-
-import yt_dlp
-
 from theme import THEMES
 
 THEME = THEMES["blue_gray"]
-
 SELECTED_CARD_BG = "#384455"
 
-ALLOW_STREAM_MERGE = False
+ALLOW_STREAM_MERGE = True
 
 
 def resource_path(relative_path):
@@ -48,16 +40,21 @@ def resource_path(relative_path):
 def get_download_dir():
     if platform == "android":
         try:
-            from android.permissions import Permission, request_permissions
-            from android.storage import primary_external_storage_path
+            if platform == "android":
+                from android.permissions import Permission, request_permissions
+                from android.storage import primary_external_storage_path
 
-            request_permissions([
-                Permission.INTERNET,
-                Permission.WRITE_EXTERNAL_STORAGE,
-                Permission.READ_EXTERNAL_STORAGE,
-            ])
+                request_permissions([
+                    Permission.INTERNET,
+                    Permission.WRITE_EXTERNAL_STORAGE,
+                    Permission.READ_EXTERNAL_STORAGE,
+                ])
 
-            download_dir = os.path.join(primary_external_storage_path(), "Download", "Tubit")
+                download_dir = os.path.join(primary_external_storage_path(), "Download", "Tubit")
+
+            else:
+                download_dir = os.path.join(os.path.expanduser("~"), "Downloads", "Tubit")
+
         except Exception as e:
             print(f"[Storage] falling back, could not resolve android storage: {e}")
             download_dir = os.path.join(os.path.expanduser("~"), "Tubit")
@@ -139,7 +136,8 @@ class FetchWorker(threading.Thread):
             Clock.schedule_once(lambda dt: self.on_done(info, formats))
 
         except Exception as e:
-            Clock.schedule_once(lambda dt: self.on_error(str(e)))
+            error_mesg = str(e)
+            Clock.schedule_once(lambda dt: self.on_error(error_mesg))
 
 
 class DownloadWorker(threading.Thread):
@@ -626,11 +624,27 @@ class TubitRoot(BoxLayout):
         self.fetch_btn.disabled = True
         self.progress.set_value(0)
         self.status_label.text = "Starting download..."
-
         url = self.url_entry.text.strip()
+
+        # --------------------------------------------
+        # Build the format string
+        # --------------------------------------------
+        if self.format_mode == "video":
+            format_id = (f"{self.selected_format['format_id']}+bestaudio/best")
+
+        elif self.format_mode == "video_only":
+            format_id = self.selected_format["format_id"]
+
+        else:   # Audio Only
+            format_id = self.selected_format["format_id"]
+
         DownloadWorker(
-            url, self.selected_format["format_id"], self.download_dir,
-            self.update_progress, self.download_complete, self.on_error,
+            url,
+            format_id,
+            self.download_dir,
+            self.update_progress,
+            self.download_complete,
+            self.on_error,
         ).start()
 
     def update_progress(self, value, status):

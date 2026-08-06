@@ -8,6 +8,7 @@ ffmpeg/
 .buildozer
 bin/
 venv
+*.log
 
 # JPG
 *.jpeg

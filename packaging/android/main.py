@@ -95,55 +95,100 @@ class FetchWorker(threading.Thread):
         self.on_error = on_error
 
     def run(self):
+        import sys
+        import traceback
+
         try:
-            opts = {"quiet": True, "skip_download": True}
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(self.url, download=False)
+            print("=" * 60)
+            print("FetchWorker started")
+            print("Platform :", platform)
+            print("Python   :", sys.version)
+            print("yt-dlp   :", yt_dlp.version.__version__)
+            print("URL      :", self.url)
+            print("=" * 60)
 
-            formats = []
-            seen = set()
-            for fmt in info.get("formats", []):
-                if not fmt.get("format_id"):
-                    continue
-                if fmt.get("protocol") == "mhtml":
-                    continue
+            print("sys.stdout :", type(sys.stdout), sys.stdout)
+            print("sys.stderr :", type(sys.stderr), sys.stderr)
+            print("stdout.write :", hasattr(sys.stdout, "write"))
+            print("stderr.write :", hasattr(sys.stderr, "write"))
 
-                height = fmt.get("height")
-                vcodec = fmt.get("vcodec", "none")
-                acodec = fmt.get("acodec", "none")
-                filesize = fmt.get("filesize_approx", fmt.get("filesize"))
+            print("STEP 1 : Building YoutubeDL options")
 
-                has_video = vcodec != "none"
-                has_audio = acodec != "none"
+            class Logger:
+                def debug(self, msg):
+                    print("[DEBUG]", msg)
 
-                # Without a guaranteed ffmpeg binary we can't merge separate
-                # video-only + audio-only streams, so only expose formats
-                # that are already usable as-is.
-                if has_video and not has_audio and not ALLOW_STREAM_MERGE:
-                    continue
+                def warning(self, msg):
+                    print("[WARNING]", msg)
 
-                key = (height, fmt.get("ext"), vcodec, acodec)
-                if key in seen:
-                    continue
-                seen.add(key)
+                def error(self, msg):
+                    print("[ERROR]", msg)
 
-                formats.append({
-                    "format_id": fmt["format_id"],
-                    "quality": f"{height}p" if height else "Audio",
-                    "extension": fmt.get("ext", "Unknown").upper(),
-                    "size": format_file_size(filesize),
-                    "codec": vcodec if has_video else acodec,
-                    "height": height or 0,
-                    "has_audio": has_audio,
-                    "has_video": has_video,
+            opts = {
+                "quiet": False,
+                "skip_download": True,
+                "logger": Logger(),
+                "progress_hooks": [
+                    lambda d: print("HOOK:", d.get("status"))
+                ],
+            }
+
+            print("STEP 2 : Creating YoutubeDL")
+
+            ydl = yt_dlp.YoutubeDL(opts)
+
+            print("STEP 3 : Calling extract_info()")
+
+            info = ydl.extract_info(self.url, download=False)
+
+            print("STEP 4 : extract_info() returned")
+
+            formats = info.get("formats", [])
+            print(f"Formats found : {len(formats)}")
+
+            processed = []
+
+            for fmt in formats:
+
+                processed.append({
+                    "format_id": fmt.get("format_id"),
+                    "quality": fmt.get("format_note")
+                               or fmt.get("resolution")
+                               or "Unknown",
+                    "extension": fmt.get("ext"),
+                    "codec": fmt.get("vcodec")
+                              if fmt.get("vcodec") != "none"
+                              else fmt.get("acodec"),
+                    "size": format_file_size(
+                        fmt.get("filesize")
+                        or fmt.get("filesize_approx")
+                    ),
+                    "has_video": fmt.get("vcodec") != "none",
+                    "has_audio": fmt.get("acodec") != "none",
                 })
 
-            formats.sort(key=lambda x: (not x["has_video"], -x["height"]))
-            Clock.schedule_once(lambda dt: self.on_done(info, formats))
+            print("STEP 5 : Scheduling UI update")
 
-        except Exception as e:
-            error_mesg = str(e)
-            Clock.schedule_once(lambda dt: self.on_error(error_mesg))
+            Clock.schedule_once(
+                lambda dt: self.on_done(info, processed)
+            )
+
+            print("FetchWorker completed successfully")
+
+        except BaseException as e:
+
+            print("=" * 60)
+            print("FetchWorker FAILED")
+            print("Exception Type :", type(e).__name__)
+            print("Exception      :", repr(e))
+            print("=" * 60)
+
+            traceback.print_exc()
+            error_message = str(e)
+            def notify(dt):
+                self.on_error(error_message)
+
+            Clock.schedule_once(notify)
 
 
 class DownloadWorker(threading.Thread):
@@ -192,7 +237,11 @@ class DownloadWorker(threading.Thread):
             Clock.schedule_once(lambda dt: self.on_done())
 
         except Exception as e:
-            Clock.schedule_once(lambda dt: self.on_error(str(e)))
+            error_message = str(e)
+            def notify(dt):
+                self.on_error(error_message)
+
+            Clock.schedule_once(notify)
 
 
 # ==================================================

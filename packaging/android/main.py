@@ -17,6 +17,12 @@ from kivy.uix.widget import Widget
 from kivy.utils import get_color_from_hex, platform
 from theme import THEMES
 
+print("=" * 50)
+print("Platform :", platform)
+print("Python   :", sys.version)
+print("yt-dlp   :", yt_dlp.version.__version__)
+print("=" * 50)
+
 THEME = THEMES["blue_gray"]
 SELECTED_CARD_BG = "#384455"
 

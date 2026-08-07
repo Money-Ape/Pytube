@@ -1,0 +1,424 @@
+import os, re, sys, threading, yt_dlp, traceback, shutil, subprocess, mimetypes
+from kivy.clock import Clock
+from kivy.utils import platform
+
+print("=" * 50)
+print("Platform :", platform)
+print("Python   :", sys.version)
+print("yt-dlp   :", yt_dlp.version.__version__)
+print("=" * 50)
+
+ALLOW_STREAM_MERGE = True
+
+def resource_path(relative_path):
+    """Same helper as tubit.py/gui.py, for locating bundled assets (e.g. the
+    app icon) whether running from source or a packaged build."""
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+# ==================================================
+# Android storage / permissions helpers
+# ==================================================
+def get_download_dir():
+    if platform == "android":
+        download_dir = "/storage/emulated/0/Download/Tubit"
+        try:
+            os.makedirs(download_dir, exist_ok=True)
+        except Exception as e:
+            print(f"[Storage] Could not pre-create {download_dir}: {e}")
+    else:
+        download_dir = os.path.join(os.path.expanduser("~"), "Downloads", "Tubit")
+        os.makedirs(download_dir, exist_ok=True)
+
+    return download_dir
+
+def get_temp_download_dir():
+    """Private, always-writable scratch folder where yt-dlp actually
+    writes files. No permission ever needed here on any Android
+    version. Finished files get moved out via publish_to_public_downloads()."""
+
+    if platform == "android":
+        try:
+            from jnius import autoclass
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            activity = PythonActivity.mActivity
+            base = activity.getExternalFilesDir(None).getAbsolutePath()
+        except Exception as e:
+            print(f"[Storage] Could not resolve app-specific dir, using home: {e}")
+            base = os.path.expanduser("~")
+        temp_dir = os.path.join(base, "tmp_downloads")
+    else:
+        temp_dir = os.path.join(os.path.expanduser("~"), ".tubit_tmp")
+
+    os.makedirs(temp_dir, exist_ok=True)
+    return temp_dir
+
+def get_android_sdk_int():
+    try:
+        from jnius import autoclass
+
+        VERSION = autoclass("android.os.Build$VERSION")
+        return int(VERSION.SDK_INT)
+    except Exception as e:
+        print(f"[Storage] Could not read SDK version: {e}")
+        return 0
+
+def publish_to_public_downloads(local_path):
+    """Move a finished file from private temp storage into the public
+    Download/Tubit folder, the same way real Android apps do it: via
+    MediaStore on API 29+ (no permission needed, no popup), falling
+    back to the classic WRITE_EXTERNAL_STORAGE permission + direct
+    write on API < 29 (pre-scoped-storage devices).
+
+    Returns the resulting display path on success, or None on failure
+    (in which case the file is left in temp storage untouched)."""
+
+    display_name = os.path.basename(local_path)
+    mime_type = mimetypes.guess_type(display_name)[0] or "application/octet-stream"
+
+    if platform != "android":
+        dest_dir = os.path.join(os.path.expanduser("~"), "Downloads", "Tubit")
+        os.makedirs(dest_dir, exist_ok=True)
+        dest_path = os.path.join(dest_dir, display_name)
+        shutil.move(local_path, dest_path)
+        return dest_path
+
+    try:
+        from jnius import autoclass
+
+        sdk_int = get_android_sdk_int()
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        activity = PythonActivity.mActivity
+        resolver = activity.getContentResolver()
+
+        if sdk_int >= 29:
+            MediaStoreDownloads = autoclass("android.provider.MediaStore$Downloads")
+            ContentValues = autoclass("android.content.ContentValues")
+
+            values = ContentValues()
+            values.put("_display_name", display_name)
+            values.put("mime_type", mime_type)
+            values.put("relative_path", "Download/Tubit")
+
+            item_uri = resolver.insert(MediaStoreDownloads.EXTERNAL_CONTENT_URI, values)
+            if item_uri is None:
+                raise RuntimeError("MediaStore insert returned a null Uri")
+
+            out_stream = resolver.openOutputStream(item_uri)
+            try:
+                with open(local_path, "rb") as f:
+                    while True:
+                        chunk = f.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        out_stream.write(chunk)
+                out_stream.flush()
+            finally:
+                out_stream.close()
+
+            os.remove(local_path)
+            return "/storage/emulated/0/Download/Tubit/" + display_name
+
+        else:
+            from android.permissions import Permission, request_permissions, check_permission
+
+            if not check_permission(Permission.WRITE_EXTERNAL_STORAGE):
+                request_permissions([
+                    Permission.WRITE_EXTERNAL_STORAGE,
+                    Permission.READ_EXTERNAL_STORAGE,
+                ])
+
+            dest_dir = "/storage/emulated/0/Download/Tubit"
+            os.makedirs(dest_dir, exist_ok=True)
+            dest_path = os.path.join(dest_dir, display_name)
+            shutil.move(local_path, dest_path)
+            return dest_path
+
+    except Exception as e:
+        print(f"[Storage] Could not publish {display_name} to public Downloads: {e}")
+        return None
+
+# ==================================================
+# ffmpeg binary location
+# ==================================================
+def get_ffmpeg_path():
+    if platform == "android":
+        try:
+            from jnius import autoclass
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            native_lib_dir = PythonActivity.mActivity.getApplicationInfo().nativeLibraryDir
+            ffmpeg_path = os.path.join(native_lib_dir, "libffmpegbin.so")
+
+            if os.path.exists(ffmpeg_path):
+                return ffmpeg_path
+
+            print(f"[ffmpeg] Expected binary not found at {ffmpeg_path}")
+            return "ffmpeg"
+
+        except Exception as e:
+            error_mesg = str(e)
+            print(f"[ffmpeg] Could not resolve native lib dir: {error_mesg}")
+            return "ffmpeg"
+
+    return "ffmpeg"
+
+def format_file_size(size):
+    if size is None:
+        return "Unknown"
+
+    units = ["B", "KB", "MB", "GB", "TB"]
+    for unit in units:
+        if size < 1024:
+            return f"{size:.2f} {unit}"
+        size /= 1024
+
+    return f"{size:.2f} PB"
+
+
+# ==================================================
+# Background workers (plain threads, not QThread)
+# ==================================================
+class FetchWorker(threading.Thread):
+    def __init__(self, url, on_done, on_error):
+        super().__init__(daemon=True)
+        self.url = url
+        self.on_done = on_done
+        self.on_error = on_error
+
+    def run(self):
+        try:
+            print("=" * 60)
+            print("FetchWorker started")
+            print("Platform :", platform)
+            print("Python   :", sys.version)
+            print("yt-dlp   :", yt_dlp.version.__version__)
+            print("URL      :", self.url)
+            print("=" * 60)
+
+            print("sys.stdout :", type(sys.stdout), sys.stdout)
+            print("sys.stderr :", type(sys.stderr), sys.stderr)
+            print("stdout.write :", hasattr(sys.stdout, "write"))
+            print("stderr.write :", hasattr(sys.stderr, "write"))
+
+            print("STEP 1 : Building YoutubeDL options")
+            class Logger:
+                def debug(self, msg):
+                    print("[DEBUG]", msg)
+
+                def warning(self, msg):
+                    print("[WARNING]", msg)
+
+                def error(self, msg):
+                    print("[ERROR]", msg)
+
+            opts = {
+                "quiet": False,
+                "skip_download": True,
+                "logger": Logger(),
+                "progress_hooks": [
+                    lambda d: print("HOOK:", d.get("status"))
+                ],
+            }
+
+            print("STEP 2 : Creating YoutubeDL")
+            ydl = yt_dlp.YoutubeDL(opts)
+
+            print("STEP 3 : Calling extract_info()")
+            info = ydl.extract_info(self.url, download=False)
+
+            print("STEP 4 : extract_info() returned")
+            formats = info.get("formats", [])
+            print(f"Formats found : {len(formats)}")
+
+            processed = []
+
+            for fmt in formats:
+
+                processed.append({
+                    "format_id": fmt.get("format_id"),
+                    "quality": fmt.get("format_note")
+                               or fmt.get("resolution")
+                               or "Unknown",
+                    "extension": fmt.get("ext"),
+                    "codec": fmt.get("vcodec")
+                              if fmt.get("vcodec") != "none"
+                              else fmt.get("acodec"),
+                    "size": format_file_size(
+                        fmt.get("filesize")
+                        or fmt.get("filesize_approx")
+                    ),
+                    "has_video": fmt.get("vcodec") != "none",
+                    "has_audio": fmt.get("acodec") != "none",
+                })
+
+            print("STEP 5 : Scheduling UI update")
+            Clock.schedule_once(
+                lambda dt: self.on_done(info, processed)
+            )
+            print("FetchWorker completed successfully")
+
+        except BaseException as e:
+
+            print("=" * 60)
+            print("FetchWorker FAILED")
+            print("Exception Type :", type(e).__name__)
+            print("Exception      :", repr(e))
+            print("=" * 60)
+
+            traceback.print_exc()
+            error_message = str(e)
+            def notify(dt):
+                self.on_error(error_message)
+
+            Clock.schedule_once(notify)
+
+class Logger:
+    def debug(self, msg):
+        print("[DEBUG]", msg)
+
+    def warning(self, msg):
+        print("[WARNING]", msg)
+
+    def error(self, msg):
+        print("[ERROR]", msg)
+
+class DownloadWorker(threading.Thread):
+    def __init__(self, url, format_id, download_dir, on_progress, on_done, on_error):
+        super().__init__(daemon=True)
+        self.url = url
+        self.format_id = format_id
+        self.download_dir = download_dir
+        self.on_progress = on_progress
+        self.on_done = on_done
+        self.on_error = on_error
+
+    def progress_hook(self, d):
+        if d["status"] != "downloading":
+            return
+
+        ansi = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+        percent_text = ansi.sub("", d.get("_percent_str", "0%"))
+        match = re.search(r"(\d+(?:\.\d+)?)", percent_text)
+        value = float(match.group(1)) if match else 0.0
+
+        speed = ansi.sub("", d.get("_speed_str", ""))
+        eta = ansi.sub("", d.get("_eta_str", ""))
+
+        status = f"{value:.1f}%"
+        if speed:
+            status += f" - {speed}"
+        if eta:
+            status += f" - ETA {eta}"
+
+        Clock.schedule_once(
+            lambda dt: self.on_progress(value, status)
+        )
+
+    def run(self):
+        try:
+            print("=" * 80)
+            print("DOWNLOAD STARTED")
+            print("Platform     :", platform)
+            print("Python       :", sys.version)
+            print("yt-dlp       :", yt_dlp.version.__version__)
+            print("URL          :", self.url)
+            print("Format       :", self.format_id)
+            print("Output Dir   :", self.download_dir)
+            ffmpeg_path = get_ffmpeg_path()
+            print("ffmpeg path  :", ffmpeg_path)
+
+            try:
+                result = subprocess.run(
+                    [ffmpeg_path, "-version"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                print("RETURN CODE :", result.returncode)
+                print(result.stdout)
+
+            except Exception:
+                traceback.print_exc()
+
+            print("=" * 80)
+
+            work_dir = get_temp_download_dir() if platform == "android" else self.download_dir
+            print("Working Dir  :", work_dir)
+
+            opts = {
+                "format": self.format_id,
+                "outtmpl": os.path.join(
+                    work_dir,
+                    "%(title)s.%(ext)s"
+                ),
+
+                "progress_hooks": [self.progress_hook],
+                "ffmpeg_location": ffmpeg_path,
+
+                "windowsfilenames": platform == "win",
+                "concurrent_fragment_downloads": 4,
+
+                # Android debugging
+                "quiet": True,
+                "no_warnings": True,
+                "logger": Logger(),
+            }
+            print("Creating YoutubeDL...")
+            ydl = yt_dlp.YoutubeDL(opts)
+
+            print("ffmpeg_location =", ydl.params.get("ffmpeg_location"))
+
+            print("Starting download...")
+            before_files = set(os.listdir(work_dir))
+            result = ydl.download([self.url])
+            after_files = set(os.listdir(work_dir))
+            new_files = sorted(after_files - before_files)
+
+            print("Download finished.")
+            print("Result:", result)
+            print("New files:", new_files)
+
+            if platform == "android":
+                if not new_files:
+                    raise RuntimeError("Download finished but no output file was found.")
+
+                print("Publishing to public Downloads/Tubit...")
+                published_any = False
+                for fname in new_files:
+                    local_path = os.path.join(work_dir, fname)
+                    final_path = publish_to_public_downloads(local_path)
+                    if final_path:
+                        print(f"Published : {final_path}")
+                        published_any = True
+                    else:
+                        print(f"Publish FAILED for {fname} (left in app-private storage)")
+
+                if not published_any:
+                    raise RuntimeError(
+                        "Download finished but could not be saved to the public "
+                        "Downloads folder."
+                    )
+
+            Clock.schedule_once(
+                lambda dt: self.on_done()
+            )
+
+        except BaseException as e:
+            print("=" * 80)
+            print("DOWNLOAD FAILED")
+            print("Exception:", repr(e))
+            traceback.print_exc()
+            print("=" * 80)
+
+            error_message = str(e)
+            def notify(dt):
+                self.on_error(error_message)
+
+            Clock.schedule_once(notify)

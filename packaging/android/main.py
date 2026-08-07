@@ -1,4 +1,5 @@
-import os, re, sys, threading, yt_dlp
+import os, re, sys, threading, yt_dlp, traceback, shutil, subprocess
+from pathlib import Path
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
@@ -27,7 +28,6 @@ THEME = THEMES["blue_gray"]
 SELECTED_CARD_BG = "#384455"
 
 ALLOW_STREAM_MERGE = True
-
 
 def resource_path(relative_path):
     """Same helper as tubit.py/gui.py, for locating bundled assets (e.g. the
@@ -94,10 +94,8 @@ class FetchWorker(threading.Thread):
         self.on_done = on_done
         self.on_error = on_error
 
+    subprocess.run(["ffmpeg", "-version"])
     def run(self):
-        import sys
-        import traceback
-
         try:
             print("=" * 60)
             print("FetchWorker started")
@@ -191,6 +189,17 @@ class FetchWorker(threading.Thread):
             Clock.schedule_once(notify)
 
 
+class Logger:
+    def debug(self, msg):
+        print("[DEBUG]", msg)
+
+    def warning(self, msg):
+        print("[WARNING]", msg)
+
+    def error(self, msg):
+        print("[ERROR]", msg)
+
+
 class DownloadWorker(threading.Thread):
     def __init__(self, url, format_id, download_dir, on_progress, on_done, on_error):
         super().__init__(daemon=True)
@@ -219,24 +228,75 @@ class DownloadWorker(threading.Thread):
         if eta:
             status += f" - ETA {eta}"
 
-        Clock.schedule_once(lambda dt: self.on_progress(value, status))
+        Clock.schedule_once(
+            lambda dt: self.on_progress(value, status)
+        )
 
     def run(self):
         try:
+            print("=" * 80)
+            print("DOWNLOAD STARTED")
+            print("Platform     :", platform)
+            print("Python       :", sys.version)
+            print("yt-dlp       :", yt_dlp.version.__version__)
+            print("URL          :", self.url)
+            print("Format       :", self.format_id)
+            print("Output Dir   :", self.download_dir)
+            try:
+                result = subprocess.run(
+                    ["ffmpeg", "-version"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                print("RETURN CODE :", result.returncode)
+                print(result.stdout)
+
+            except Exception:
+                traceback.print_exc()
+
+            print("=" * 80)
+
             opts = {
                 "format": self.format_id,
-                "outtmpl": os.path.join(self.download_dir, "%(title)s.%(ext)s"),
+                "outtmpl": os.path.join(
+                    self.download_dir,
+                    "%(title)s.%(ext)s"
+                ),
+
                 "progress_hooks": [self.progress_hook],
-                "windowsfilenames": True,
+                "ffmpeg_location": "ffmpeg",
+
+                "windowsfilenames": platform == "win",
                 "concurrent_fragment_downloads": 4,
+
+                # Android debugging
+                "quiet": True,
+                "no_warnings": True,
+                "logger": Logger(),
             }
+            print("Creating YoutubeDL...")
+            ydl = yt_dlp.YoutubeDL(opts)
 
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([self.url])
+            print("ffmpeg_location =", ydl.params.get("ffmpeg_location"))
 
-            Clock.schedule_once(lambda dt: self.on_done())
+            print("Starting download...")
+            result = ydl.download([self.url])
 
-        except Exception as e:
+            print("Download finished.")
+            print("Result:", result)
+
+            Clock.schedule_once(
+                lambda dt: self.on_done()
+            )
+
+        except BaseException as e:
+            print("=" * 80)
+            print("DOWNLOAD FAILED")
+            print("Exception:", repr(e))
+            traceback.print_exc()
+            print("=" * 80)
+
             error_message = str(e)
             def notify(dt):
                 self.on_error(error_message)

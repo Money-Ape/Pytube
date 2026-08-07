@@ -71,6 +71,31 @@ def get_download_dir():
     return download_dir
 
 
+# ==================================================
+# ffmpeg binary location
+# ==================================================
+def get_ffmpeg_path():
+    if platform == "android":
+        try:
+            from jnius import autoclass
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            native_lib_dir = PythonActivity.mActivity.getApplicationInfo().nativeLibraryDir
+            ffmpeg_path = os.path.join(native_lib_dir, "libffmpegbin.so")
+
+            if os.path.exists(ffmpeg_path):
+                return ffmpeg_path
+
+            print(f"[ffmpeg] Expected binary not found at {ffmpeg_path}")
+            return "ffmpeg"
+
+        except Exception as e:
+            error_mesg = str(e)
+            print(f"[ffmpeg] Could not resolve native lib dir: {error_mesg}")
+            return "ffmpeg"
+
+    return "ffmpeg"
+
 def format_file_size(size):
     if size is None:
         return "Unknown"
@@ -94,7 +119,6 @@ class FetchWorker(threading.Thread):
         self.on_done = on_done
         self.on_error = on_error
 
-    subprocess.run(["ffmpeg", "-version"])
     def run(self):
         try:
             print("=" * 60)
@@ -188,7 +212,6 @@ class FetchWorker(threading.Thread):
 
             Clock.schedule_once(notify)
 
-
 class Logger:
     def debug(self, msg):
         print("[DEBUG]", msg)
@@ -198,7 +221,6 @@ class Logger:
 
     def error(self, msg):
         print("[ERROR]", msg)
-
 
 class DownloadWorker(threading.Thread):
     def __init__(self, url, format_id, download_dir, on_progress, on_done, on_error):
@@ -242,9 +264,12 @@ class DownloadWorker(threading.Thread):
             print("URL          :", self.url)
             print("Format       :", self.format_id)
             print("Output Dir   :", self.download_dir)
+            ffmpeg_path = get_ffmpeg_path()
+            print("ffmpeg path  :", ffmpeg_path)
+
             try:
                 result = subprocess.run(
-                    ["ffmpeg", "-version"],
+                    [ffmpeg_path, "-version"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
@@ -265,7 +290,7 @@ class DownloadWorker(threading.Thread):
                 ),
 
                 "progress_hooks": [self.progress_hook],
-                "ffmpeg_location": "ffmpeg",
+                "ffmpeg_location": ffmpeg_path,
 
                 "windowsfilenames": platform == "win",
                 "concurrent_fragment_downloads": 4,
@@ -303,7 +328,6 @@ class DownloadWorker(threading.Thread):
 
             Clock.schedule_once(notify)
 
-
 # ==================================================
 # Themed UI primitives
 # ==================================================
@@ -338,7 +362,6 @@ class Card(BoxLayout):
     def set_border(self, hex_color):
         self._border_color.rgba = get_color_from_hex(hex_color)
 
-
 class RoundedProgressBar(Widget):
     """Rounded progress bar drawn with theme colors, mirroring gui.py's
     QProgressBar { background: interactive; } / ::chunk { background: accent; }."""
@@ -366,14 +389,12 @@ class RoundedProgressBar(Widget):
         self.value = max(0, min(value, self.maximum))
         self._redraw()
 
-
 def section_title(text, size=15):
     return Label(
         text=f"[b]{text}[/b]", markup=True, font_size=dp(size),
         halign="left", valign="middle", size_hint_y=None, height=dp(24),
         color=get_color_from_hex(THEME["text"]),
     )
-
 
 def subtext_label(text, size=11, height=20):
     lbl = Label(
@@ -383,7 +404,6 @@ def subtext_label(text, size=11, height=20):
     )
     lbl.bind(size=lambda w, *_: setattr(w, "text_size", w.size))
     return lbl
-
 
 # ==================================================
 # Format card
@@ -436,7 +456,6 @@ class FormatCard(ToggleButtonBehavior, Card):
             self.set_bg(THEME["workspace"])
             self.set_border(THEME["border"])
 
-
 class FilterButton(ToggleButton):
     """Pill-style filter toggle standing in for gui.py's QRadioButton row."""
 
@@ -453,7 +472,6 @@ class FilterButton(ToggleButton):
             self.background_color = get_color_from_hex(THEME["accent"])
         else:
             self.background_color = get_color_from_hex(THEME["interactive"])
-
 
 # ==================================================
 # Root layout
@@ -782,7 +800,6 @@ class TubitRoot(BoxLayout):
         self.fetch_btn.text = "Fetch Available Formats"
         self.download_btn.disabled = False
         self.status_label.text = f"Error: {message}"
-
 
 class TubitApp(App):
     def build(self):

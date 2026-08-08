@@ -226,7 +226,7 @@ class FormatCard(ToggleButtonBehavior, Card):
         top_row.add_widget(self.check_label)
 
         codec = Label(
-            text=fmt["codec"].upper(), font_size=dp(11),
+            text=(fmt.get("codec") or "Unknown").upper(), font_size=dp(11),
             halign="left", valign="middle", size_hint_y=None, height=dp(16),
             color=get_color_from_hex(THEME["subtext"]),
         )

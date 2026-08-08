@@ -160,14 +160,96 @@ def get_ffmpeg_path():
                 return ffmpeg_path
 
             print(f"[ffmpeg] Expected binary not found at {ffmpeg_path}")
-            return "ffmpeg"
+            return None
 
         except Exception as e:
             error_mesg = str(e)
             print(f"[ffmpeg] Could not resolve native lib dir: {error_mesg}")
-            return "ffmpeg"
+            return None
 
     return "ffmpeg"
+
+def get_ffprobe_path():
+    if platform == "android":
+        try:
+            from jnius import autoclass
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            native_lib_dir = PythonActivity.mActivity.getApplicationInfo().nativeLibraryDir
+            ffprobe_path = os.path.join(native_lib_dir, "libffprobebin.so")
+
+            return ffprobe_path if os.path.exists(ffprobe_path) else None
+
+        except Exception as e:
+            print(f"[ffprobe] Could not resolve native lib dir: {e}")
+            return None
+
+    return "ffprobe"
+
+_FFMPEG_BIN_DIR = None
+
+def prepare_ffmpeg_location():
+    global _FFMPEG_BIN_DIR
+
+    if platform != "android":
+        return get_ffmpeg_path()
+
+    if _FFMPEG_BIN_DIR and os.path.isdir(_FFMPEG_BIN_DIR):
+        return _FFMPEG_BIN_DIR
+
+    ffmpeg_bin = get_ffmpeg_path()
+    if not ffmpeg_bin or not os.path.exists(ffmpeg_bin):
+        print("[ffmpeg] No bundled ffmpeg binary available; leaving ffmpeg_location unset")
+        return None
+
+    ffprobe_bin = get_ffprobe_path() or ffmpeg_bin
+    if ffprobe_bin == ffmpeg_bin:
+        print("[ffprobe] No bundled libffprobebin.so found - reusing the ffmpeg "
+              "binary under the 'ffprobe' name. This stops the exec-on-missing-path "
+              "crash, but real ffprobe-only features (accurate duration/format "
+              "probing) won't work until a real ffprobe binary is bundled.")
+
+    try:
+        if platform == "android":
+            try:
+                from jnius import autoclass
+
+                PythonActivity = autoclass("org.kivy.android.PythonActivity")
+                activity = PythonActivity.mActivity
+                base = activity.getFilesDir().getAbsolutePath()
+            except Exception as e:
+                print(f"[ffmpeg] Could not resolve internal files dir, falling back: {e}")
+                base = os.path.dirname(get_temp_download_dir())
+        else:
+            base = os.path.dirname(get_temp_download_dir())
+
+        bin_dir = os.path.join(base, "ffmpeg_bin")
+        os.makedirs(bin_dir, exist_ok=True)
+
+        for name, source in (("ffmpeg", ffmpeg_bin), ("ffprobe", ffprobe_bin)):
+            link_path = os.path.join(bin_dir, name)
+            if os.path.exists(link_path) or os.path.islink(link_path):
+                # Re-link if it's pointing at the wrong source (e.g. a real
+                # ffprobe binary was added after the placeholder was created).
+                if os.path.realpath(link_path) == os.path.realpath(source):
+                    continue
+                os.remove(link_path)
+            try:
+                os.symlink(source, link_path)
+            except OSError:
+                shutil.copy2(source, link_path)
+            try:
+                os.chmod(link_path, 0o755)
+            except OSError:
+                pass
+
+        os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+        _FFMPEG_BIN_DIR = bin_dir
+        return bin_dir
+
+    except Exception as e:
+        print(f"[ffmpeg] Could not prepare ffmpeg/ffprobe dir: {e}")
+        return None
 
 def format_file_size(size):
     if size is None:
@@ -180,7 +262,6 @@ def format_file_size(size):
         size /= 1024
 
     return f"{size:.2f} PB"
-
 
 # ==================================================
 # Background workers (plain threads, not QThread)
@@ -218,6 +299,9 @@ class FetchWorker(threading.Thread):
                 def error(self, msg):
                     print("[ERROR]", msg)
 
+            ffmpeg_loc = prepare_ffmpeg_location()
+            print("STEP 1b: ffmpeg_location resolved to", ffmpeg_loc)
+
             opts = {
                 "quiet": False,
                 "skip_download": True,
@@ -226,6 +310,8 @@ class FetchWorker(threading.Thread):
                     lambda d: print("HOOK:", d.get("status"))
                 ],
             }
+            if ffmpeg_loc:
+                opts["ffmpeg_location"] = ffmpeg_loc
 
             print("STEP 2 : Creating YoutubeDL")
             ydl = yt_dlp.YoutubeDL(opts)
@@ -247,9 +333,9 @@ class FetchWorker(threading.Thread):
                                or fmt.get("resolution")
                                or "Unknown",
                     "extension": fmt.get("ext"),
-                    "codec": fmt.get("vcodec")
-                              if fmt.get("vcodec") != "none"
-                              else fmt.get("acodec"),
+                    "codec": (fmt.get("vcodec")
+                              if fmt.get("vcodec") not in (None, "none")
+                              else fmt.get("acodec")) or "Unknown",
                     "size": format_file_size(
                         fmt.get("filesize")
                         or fmt.get("filesize_approx")
@@ -332,7 +418,9 @@ class DownloadWorker(threading.Thread):
             print("Format       :", self.format_id)
             print("Output Dir   :", self.download_dir)
             ffmpeg_path = get_ffmpeg_path()
-            print("ffmpeg path  :", ffmpeg_path)
+            ffmpeg_loc = prepare_ffmpeg_location()
+            print("ffmpeg path     :", ffmpeg_path)
+            print("ffmpeg_location :", ffmpeg_loc)
 
             try:
                 result = subprocess.run(
@@ -360,7 +448,6 @@ class DownloadWorker(threading.Thread):
                 ),
 
                 "progress_hooks": [self.progress_hook],
-                "ffmpeg_location": ffmpeg_path,
 
                 "windowsfilenames": platform == "win",
                 "concurrent_fragment_downloads": 4,
@@ -370,6 +457,9 @@ class DownloadWorker(threading.Thread):
                 "no_warnings": True,
                 "logger": Logger(),
             }
+            if ffmpeg_loc:
+                opts["ffmpeg_location"] = ffmpeg_loc
+
             print("Creating YoutubeDL...")
             ydl = yt_dlp.YoutubeDL(opts)
 

@@ -114,6 +114,41 @@ inside the APK:
 lib/arm64-v8a/libffmpegbin.so
 ```
 
+### 🔧 Building Your Own FFmpeg Binary
+
+The `libffmpegbin.so` consumed by `p4a.local_recipes` isn't built inside this repo — it comes from a separate pipeline: **[ffmpeg-android-native](https://github.com/Money-Ape/ffmpeg-android-native)**. Use it directly if you need to rebuild ffmpeg (e.g. a different codec set, a newer FFmpeg version, or a different target arch).
+
+```bash
+git clone https://github.com/Money-Ape/ffmpeg-android-native.git
+cd ffmpeg-android-native
+chmod +x *.sh
+source ./env.sh          # points at Buildozer's NDK - run buildozer android debug once first if you haven't
+./build.sh aarch64        # match Tubit's android.archs (arm64-v8a → aarch64 here)
+```
+
+This outputs:
+
+```
+ffmpeg-native-bin/ffmpeg-aarch64/ffmpeg
+ffmpeg-native-bin/ffmpeg-aarch64/libffmpeg/libffmpegbin.so
+```
+
+Copy the `.so` into Tubit's local recipe so `p4a.local_recipes` picks it up on the next build:
+
+```bash
+cp ffmpeg-native-bin/ffmpeg-aarch64/libffmpeg/libffmpegbin.so \
+   <path_to_Tubit>/p4a_recipes/ffmpeg/libffmpegbin.so
+```
+
+Then rebuild Tubit as usual:
+
+```bash
+buildozer android clean
+buildozer android debug
+```
+
+**Keep the arch in sync:** if `buildozer.spec`'s `android.archs` ever changes from `arm64-v8a`, build the matching arch in `ffmpeg-android-native` too (`x86` for x86, `x86_64` for x86_64) — dropping one arch's binary into another arch's slot produces `Exec format error` at runtime on that device. See that repo's README for the full build/verify/packaging details, including why the binary has to ship as a native `.so` rather than an asset, and why the runtime symlink to it must live on internal storage.
+
 ## 📂 Storage Behavior
 
 Downloads are handled safely:
@@ -159,6 +194,8 @@ Ensure:
 ```
 ffmpeg is included in requirements
 ```
+
+If `libffmpegbin.so` itself is the problem (wrong arch, corrupted build, or you just want a fresher FFmpeg), rebuild it from **[ffmpeg-android-native](https://github.com/Money-Ape/ffmpeg-android-native)** — see the FFmpeg Integration section above.
 
 **APK installs but crashes**
 

@@ -309,6 +309,16 @@ class FetchWorker(threading.Thread):
                 "progress_hooks": [
                     lambda d: print("HOOK:", d.get("status"))
                 ],
+                # YouTube has been DRM-protecting the 'tv' client's streams
+                # since early 2025 (yt-dlp issue #12563), and yt-dlp tries
+                # 'tv' first by default, so a lot of videos were failing as
+                # "DRM protected" even though non-DRM formats exist via other
+                # clients. Skip 'tv' and let yt-dlp fall back through its
+                # other default clients instead. Revisit this if YouTube
+                # changes tactics again - it's a moving target.
+                "extractor_args": {
+                    "youtube": {"player_client": ["default", "-tv"]}
+                },
             }
             if ffmpeg_loc:
                 opts["ffmpeg_location"] = ffmpeg_loc
@@ -450,7 +460,17 @@ class DownloadWorker(threading.Thread):
                 "progress_hooks": [self.progress_hook],
 
                 "windowsfilenames": platform == "win",
-                "concurrent_fragment_downloads": 4,
+                "concurrent_fragment_downloads": 2,
+
+                "retries": 20,
+                "fragment_retries": 20,
+                "socket_timeout": 30,
+
+                # Same 'tv' client DRM workaround as FetchWorker - see the
+                # comment there for details.
+                "extractor_args": {
+                    "youtube": {"player_client": ["default", "-tv"]}
+                },
 
                 # Android debugging
                 "quiet": True,

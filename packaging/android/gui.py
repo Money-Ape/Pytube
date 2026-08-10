@@ -304,7 +304,8 @@ class TubitRoot(BoxLayout):
         self.video_info = None
         self.format_mode = "video"
 
-        scroll = ScrollView(size_hint=(1, 1), bar_width=dp(4), bar_color=get_color_from_hex(THEME["accent"]))
+        scroll = ScrollView(size_hint=(1, 1), bar_width=0,
+                             bar_color=(0, 0, 0, 0), bar_inactive_color=(0, 0, 0, 0))
         self.content = BoxLayout(orientation="vertical", spacing=dp(14), size_hint_y=None, padding=(0, 0, 0, dp(8)))
         self.content.bind(minimum_height=self.content.setter("height"))
         scroll.add_widget(self.content)
@@ -335,7 +336,7 @@ class TubitRoot(BoxLayout):
         title_box = BoxLayout(orientation="vertical", spacing=dp(2))
         title_row = BoxLayout(size_hint_y=None, height=dp(28), spacing=dp(8))
         title = Label(
-            text="[b]Video Downloader[/b]", markup=True, font_size=dp(20),
+            text="[b]TUBIT: Video Downloader[/b]", markup=True, font_size=dp(20),
             halign="left", valign="bottom", size_hint_x=1,
             color=get_color_from_hex(THEME["text"]),
         )
@@ -343,7 +344,7 @@ class TubitRoot(BoxLayout):
 
         version_badge = Card(bg=THEME["interactive"], no_border=True, radius=8, shadow=False,
                               size_hint=(None, None), size=(dp(46), dp(22)))
-        version_badge.add_widget(Label(text="v1.4", font_size=dp(10), bold=True,
+        version_badge.add_widget(Label(text="v1.6", font_size=dp(10), bold=True,
                                         color=get_color_from_hex(THEME["subtext"])))
 
         title_row.add_widget(title)
@@ -365,8 +366,9 @@ class TubitRoot(BoxLayout):
 
     # ---------- URL card ----------
     def _build_url_card(self):
-        card = Card(orientation="vertical", padding=dp(16), spacing=dp(10),
-                    size_hint_y=None, height=dp(146))
+        card = Card(orientation="vertical", padding=dp(16), spacing=dp(10), size_hint_y=None)
+        card.bind(minimum_height=card.setter("height"))
+        self.url_card = card
 
         card.add_widget(section_title("URL (YouTube | Instagram)", size=13))
 
@@ -385,7 +387,7 @@ class TubitRoot(BoxLayout):
         input_wrap.add_widget(self.url_entry)
 
         self.fetch_btn = AnimatedButton(
-            text="Fetch Available Formats", size_hint_y=None, height=dp(46),
+            text="Fetch Available Formats", size_hint_y=None, height=0, opacity=0,
             background_color=get_color_from_hex(THEME["interactive"]),
             color=get_color_from_hex(THEME["subtext"]), bold=True,
             disabled=True,
@@ -398,6 +400,7 @@ class TubitRoot(BoxLayout):
 
     def _on_url_text_changed(self):
         has_text = bool(self.url_entry.text.strip())
+        self._set_collapsed(self.fetch_btn, not has_text, dp(46))
         if has_text:
             self.fetch_btn.set_style(THEME["accent"], "#FFFFFF", disabled=False)
         else:
@@ -437,7 +440,8 @@ class TubitRoot(BoxLayout):
         # comment on FilterButton for why this can't be a constructor kwarg.
         self.video_btn.state = "down"
 
-        scroll = ScrollView(size_hint=(1, 1), bar_width=dp(3), bar_color=get_color_from_hex(THEME["accent"]))
+        scroll = ScrollView(size_hint=(1, 1), bar_width=0,
+                            bar_color=(0, 0, 0, 0), bar_inactive_color=(0, 0, 0, 0))
         self.grid = GridLayout(cols=2, spacing=dp(8), size_hint_y=None, padding=(0, dp(4)))
         self.grid.bind(minimum_height=self.grid.setter("height"))
         scroll.add_widget(self.grid)
@@ -502,8 +506,8 @@ class TubitRoot(BoxLayout):
 
     # ---------- download card ----------
     def _build_download_card(self):
-        card = Card(orientation="vertical", padding=dp(16), spacing=dp(8),
-                    size_hint_y=None, height=dp(272))
+        card = Card(orientation="vertical", padding=dp(16), spacing=dp(8), size_hint_y=None)
+        card.bind(minimum_height=card.setter("height"))
 
         card.add_widget(section_title("Download", size=13))
 
@@ -517,7 +521,7 @@ class TubitRoot(BoxLayout):
         card.add_widget(self.selected_format_label)
 
         self.download_btn = AnimatedButton(
-            text="Download", size_hint_y=None, height=dp(46), disabled=True,
+            text="Download", size_hint_y=None, height=0, opacity=0, disabled=True,
             background_color=get_color_from_hex(THEME["interactive"]),
             color=get_color_from_hex(THEME["subtext"]), bold=True,
         )
@@ -559,6 +563,17 @@ class TubitRoot(BoxLayout):
         color = STATUS_COLORS.get(kind, THEME["accent"])
         self.status_label.text = f"[color={color}]\u25CF[/color]  {text}"
 
+    @staticmethod
+    def _set_collapsed(widget, collapsed, expanded_height):
+        """Show/hide a widget by animating its height to 0 (rather than just
+        disabling it) so the surrounding card shrinks/grows around it instead
+        of leaving a dead, disabled-looking button in place."""
+        widget.size_hint_y = None
+        target = 0 if collapsed else expanded_height
+        Animation.cancel_all(widget, "height", "opacity")
+        Animation(height=target, opacity=0 if collapsed else 1,
+                  duration=0.15, t="out_quad").start(widget)
+
     def _on_thumbnail_source_changed(self, widget, value):
         has_source = bool(value)
         widget.opacity = 1 if has_source else 0
@@ -591,6 +606,7 @@ class TubitRoot(BoxLayout):
         self.selected_format = None
         self.selected_format_label.text = "No Format Selected"
         self.download_btn.set_style(THEME["interactive"], THEME["subtext"], disabled=True)
+        self._set_collapsed(self.download_btn, True, dp(46))
         self._set_status("Select a format to continue.", "info")
 
         self.filter_formats()
@@ -600,6 +616,7 @@ class TubitRoot(BoxLayout):
         self.selected_format = None
         self.selected_format_label.text = "No Format Selected"
         self.download_btn.set_style(THEME["interactive"], THEME["subtext"], disabled=True)
+        self._set_collapsed(self.download_btn, True, dp(46))
 
         if self.video_btn.state == "down":
             self.format_mode = "video"
@@ -627,6 +644,7 @@ class TubitRoot(BoxLayout):
         self.selected_format = fmt
         self.selected_format_label.text = f"\u2713 {fmt['quality']} \u2022 {fmt['extension']} \u2022 {fmt['size']}"
         self.download_btn.set_style(THEME["accent"], "#FFFFFF", disabled=False)
+        self._set_collapsed(self.download_btn, False, dp(46))
 
     def download_video(self):
         if not self.selected_format:

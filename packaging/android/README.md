@@ -18,12 +18,43 @@ You must create and configure it manually before building.
 
 ```bash
 sudo pacman -S python git zip unzip openjdk-17-jdk android-tools
+```
+
+`uv` handles the rest (see **Automated Build** below) — you no longer need to manually `pip install buildozer cython`.
+
+<details>
+<summary>Manual install (if you're not using build.sh)</summary>
+
+```bash
 pip install --upgrade buildozer cython
 ```
 
-## 📦 Setup & Build
+</details>
 
-### 1. Initialize Buildozer
+---
+
+## 🚀 Automated Build (`build.sh`)
+
+The fastest path from clone to installed APK:
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+### What it does
+
+1. Creates a `.venv` (via `uv`, pinned to Python 3.12) in the project root **if one doesn't already exist** — it won't recreate it on every run.
+2. Activates that `.venv` and installs `yt-dlp kivy cython buildozer certifi pyjnius` into it with `uv pip install`.
+3. Prompts **"Clean build? (y/n)"** — answering `y` runs `buildozer android clean` and deletes `.buildozer` entirely before building; `n` does an incremental build.
+4. Runs `buildozer -v android debug`.
+5. Finds the resulting `*-debug.apk` under `bin/`, reads `version` out of `buildozer.spec`, and renames it to `bin/tubit-<version>.apk` (e.g. `bin/tubit-1.6.apk`).
+
+⚠️ **This `.venv` lives inside the project root, which is exactly what `source.dir = .` in `buildozer.spec` sweeps into the APK's private data.** Without an exclusion, buildozer will try to bytecode-compile every package inside `.venv` — including `buildozer` and `cython` themselves — into the app, which can outright break the build (this is what happened when an unrelated leftover `venv/` folder full of unrelated packages was picked up in the same way). Make sure `buildozer.spec`'s `source.exclude_dirs` includes `.venv` — see the config below.
+
+Re-running `./build.sh` after the first successful build is safe: it skips `.venv` creation and only reinstalls/rebuilds what's needed, prompting again for a clean vs. incremental build.
+
+---
 
 ```bash
 buildozer init
@@ -50,6 +81,7 @@ version = 1.4
 source.dir = .
 source.main = main.py
 source.include_exts = py,png,jpg,jpeg,kv,ttf,json
+source.exclude_dirs = .venv,venv,.git,.buildozer,__pycache__,bin
 
 requirements = python3,kivy,yt-dlp,certifi,pyjnius,ffmpeg
 
@@ -76,17 +108,26 @@ warn_on_root = 1
 
 ### 3. Build APK
 
+Recommended — use the automated script (see **Automated Build** above):
+
+```bash
+./build.sh
+```
+
+Or manually:
+
 ```bash
 buildozer android debug
 ```
 
-First build will take time (SDK + NDK download)
+First build will take time (SDK + NDK download). The manual path skips `build.sh`'s auto-rename step, so your APK stays as whatever buildozer names it under `bin/`.
 
 ### 4. Install APK
 
 ```bash
-adb install -r bin/*.apk
+adb install -r bin/tubit-*.apk
 ```
+(or `bin/*.apk` if you built manually without `build.sh`)
 
 ## 🧪 Debugging
 
@@ -176,6 +217,8 @@ Supports:
 ├── theme.py
 ├── assets/
 ├── p4a_recipes/
+├── build.sh
+├── .venv/            (created by build.sh - must stay in source.exclude_dirs)
 └── buildozer.spec   (user-generated)
 ```
 
@@ -186,6 +229,10 @@ Supports:
 ```bash
 buildozer init
 ```
+
+**Build fails compiling unrelated packages (buildozer, pip, cython, or anything from `.venv`)**
+
+`source.dir = .` bundles everything in the project root, including `build.sh`'s own `.venv`. Add `source.exclude_dirs = .venv,venv,.git,.buildozer,__pycache__,bin` to `buildozer.spec` (see the config above) and run `buildozer android clean` before rebuilding.
 
 **FFmpeg not working**
 
@@ -221,11 +268,21 @@ Handled automatically using:
 ## 🚀 Quick Build Flow
 
 ```bash
+./build.sh
+adb install -r bin/tubit-*.apk
+```
+
+<details>
+<summary>Manual flow (no build.sh)</summary>
+
+```bash
 buildozer init
 # edit buildozer.spec
 buildozer android debug
 adb install -r bin/*.apk
 ```
+
+</details>
 
 ## ✅ Status
 
@@ -233,3 +290,4 @@ adb install -r bin/*.apk
 - ✔ FFmpeg bundled
 - ✔ yt-dlp integrated
 - ✔ Storage handling implemented
+- ✔ Automated build via `build.sh` (uv-managed venv, clean/incremental prompt, auto-versioned APK output)
